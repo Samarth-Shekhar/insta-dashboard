@@ -113,7 +113,7 @@ const Dashboard = () => {
     };
 
     const clearHashtags = async () => {
-        if (!window.confirm('Clear ALL data?')) return;
+        if (!window.confirm('Clear ALL hashtag post data?')) return;
         setLoading(true);
         try {
             await api.delete('/hashtags');
@@ -122,6 +122,20 @@ const Dashboard = () => {
             alert('Cleared!');
         } catch (error) {
             alert('Failed to clear: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const clearComments = async () => {
+        if (!window.confirm('⚠️ WARNING: Clear ALL scraped comments logic?\nThis cannot be undone.')) return;
+        setLoading(true);
+        try {
+            await api.delete('/comments');
+            setComments([]);
+            alert('All comments cleared!');
+        } catch (error) {
+            alert('Failed to clear comments: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -208,9 +222,10 @@ const Dashboard = () => {
                 {activeTab === 'hashtag_comments' && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
                         <div className="flex flex-col mb-6 gap-4">
-                            <div className="flex justify-between items-center">
-                                <h2 className="text-xl font-bold text-gray-800">Hashtag Scraped Comments</h2>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-xl font-bold text-gray-800">Scraped Comments</h2>
                                 <div className="flex gap-2">
+                                    <button onClick={clearComments} className="px-4 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-2">🗑️ Clear Data</button>
                                     <button onClick={exportComments} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Export CSV</button>
                                     <button onClick={fetchStoredComments} className="px-4 py-2 text-sm bg-gray-50 text-gray-600 border rounded hover:bg-gray-100">↻ Refresh</button>
                                 </div>
@@ -274,6 +289,7 @@ const Dashboard = () => {
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-bold text-gray-800">Scraped Comments</h2>
                             <div className="flex gap-2">
+                                <button onClick={clearComments} className="px-4 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-2">🗑️ Clear Data</button>
                                 <button onClick={exportComments} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Export CSV</button>
                                 <button onClick={fetchStoredComments} className="px-4 py-2 text-sm bg-gray-50 text-gray-600 border rounded hover:bg-gray-100">↻ Refresh</button>
                             </div>
