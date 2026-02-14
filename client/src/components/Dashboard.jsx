@@ -282,7 +282,7 @@ const Dashboard = () => {
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Post URL</th>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Username</th>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider w-1/3">Caption</th>
-                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Hashtag</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -295,8 +295,22 @@ const Dashboard = () => {
                                                     </a>
                                                 </td>
                                                 <td className="p-4 font-medium text-gray-800">{post.owner || 'Unknown'}</td>
-                                                <td className="p-4 text-gray-700 text-sm">{post.caption ? post.caption.substring(0, 100) + '...' : '-'}</td>
-                                                <td className="p-4 text-gray-500 text-xs font-medium bg-gray-50 rounded">#{post.searchQuery}</td>
+                                                <td className="p-4 text-gray-700 text-sm">{post.caption ? post.caption.substring(0, 50) + '...' : '-'}</td>
+                                                <td className="p-4">
+                                                    <button
+                                                        onClick={() => {
+                                                            if (window.confirm(`Start scraping comments for this post?\n${post.url}`)) {
+                                                                // Redirect to post so extension can scrape comments
+                                                                // Or trigger backend
+                                                                alert('Feature: Opening post. Please click "💬 COMMENTS" in scraper extension!');
+                                                                window.open(post.url, '_blank');
+                                                            }
+                                                        }}
+                                                        className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded hover:bg-indigo-700 font-medium flex items-center gap-1"
+                                                    >
+                                                        💬 Scrape Comments
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ))
                                     ) : (
