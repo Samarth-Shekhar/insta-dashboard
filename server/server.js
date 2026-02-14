@@ -39,7 +39,7 @@ async function connectToDatabase() {
     const opts = {
         useNewUrlParser: true,
         useUnifiedTopology: true,
-        bufferCommands: false, // Disable Mongoose buffering
+        bufferCommands: true, // Enable buffering to prevent race conditions
     };
 
     try {
