@@ -116,4 +116,15 @@ router.delete('/', async (req, res) => {
     }
 });
 
+// POST /api/comments/clear (Backup for DELETE issues)
+router.post('/clear', async (req, res) => {
+    try {
+        await Comment.deleteMany({});
+        res.status(200).json({ message: 'All comments cleared successfully' });
+    } catch (error) {
+        console.error('Error clearing comments:', error);
+        res.status(500).json({ error: 'Failed to clear comments' });
+    }
+});
+
 module.exports = router;

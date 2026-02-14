@@ -131,7 +131,8 @@ const Dashboard = () => {
         if (!window.confirm('⚠️ WARNING: Clear ALL scraped comments logic?\nThis cannot be undone.')) return;
         setLoading(true);
         try {
-            await api.delete('/comments');
+            // Using POST /clear as fallback for DELETE issues
+            await api.post('/comments/clear');
             setComments([]);
             alert('All comments cleared!');
         } catch (error) {

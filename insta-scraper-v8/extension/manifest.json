@@ -1,0 +1,42 @@
+{
+    "manifest_version": 3,
+    "name": "Insta-Extractor",
+    "version": "1.0",
+    "description": "Inject comment extractor into Instagram",
+    "permissions": [
+        "activeTab",
+        "scripting"
+    ],
+    "host_permissions": [
+        "https://www.instagram.com/*",
+        "http://localhost:5001/*",
+        "https://*.vercel.app/*"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.instagram.com/*"
+            ],
+            "js": [
+                "api-interceptor.js"
+            ],
+            "run_at": "document_start",
+            "world": "MAIN"
+        },
+        {
+            "matches": [
+                "https://www.instagram.com/*"
+            ],
+            "js": [
+                "content-simple.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "action": {
+        "default_title": "Insta-Extractor"
+    }
+}

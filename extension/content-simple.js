@@ -110,11 +110,12 @@ async function scrapeVisibleComments(isAuto = false) {
             if (!seen.has(text.substring(0, 20))) {
                 seen.add(text.substring(0, 20));
                 comments.push({
-                    id: Math.random(),
+                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
                     username: username.substring(0, 30),
                     text: text,
                     mediaId: mediaId,
-                    hashtag: targetHashtag
+                    hashtag: targetHashtag,
+                    timestamp: new Date().toISOString()
                 });
             }
         });
