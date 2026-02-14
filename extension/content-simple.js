@@ -1,7 +1,7 @@
-// Insta-Extractor v8.3 - "Auto-Comment" Edition
-// Features: Auto-trigger via URL hash, Deep Comment Scrolling
+// Insta-Extractor v8.4 - "Time Limit" Edition
+// Features: Auto-Stop at specific time
 
-console.log('🚀 Insta-Extractor v8.3 Auto-Comment Loaded');
+console.log('🚀 Insta-Extractor v8.4 Configurable Bot Loaded');
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -13,7 +13,7 @@ let smartStats = { batchCount: 0, total: 0 };
 let smartTimer = null;
 let hasAutoRun = false;
 
-// --- CONFIG ---
+// --- CONFIG DEFAULTS ---
 const DEFAULT_CONFIG = {
     SCROLL_DELAY_SEC: 8.2,
     JITTER_MS: 2000,
@@ -25,11 +25,10 @@ const DEFAULT_CONFIG = {
 
 // --- UI INJECTION ---
 function injectSimpleUI() {
-    // 1. Check for Auto-Start Hash
     if (!hasAutoRun && window.location.hash === '#scrape_comments') {
         hasAutoRun = true;
         console.log('🤖 Auto-Scrape Triggered by URL!');
-        setTimeout(() => scrapeVisibleComments(true), 2000); // 2s delay to load
+        setTimeout(() => scrapeVisibleComments(true), 2000);
     }
 
     if (document.getElementById('insta-scraper-v7')) return;
@@ -37,14 +36,14 @@ function injectSimpleUI() {
     const div = document.createElement('div');
     div.id = 'insta-scraper-v7';
     div.style.cssText = `
-        position: fixed; bottom: 20px; left: 20px; width: 340px;
+        position: fixed; bottom: 20px; left: 20px; width: 350px;
         background: white; border: 2px solid #8e44ad; border-radius: 12px;
         padding: 15px; z-index: 9999999; box-shadow: 0 10px 30px rgba(0,0,0,0.3); font-family: sans-serif;
     `;
 
     div.innerHTML = `
         <h3 style="margin:0 0 10px; color:#8e44ad; display:flex; justify-content:space-between; align-items:center;">
-            <span>🤖 Scraper v8.3</span>
+            <span>🤖 Scraper v8.4</span>
             <span style="font-size:12px; color:#999; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">❌</span>
         </h3>
         
@@ -62,7 +61,14 @@ function injectSimpleUI() {
 
         <div style="background:#fff3cd; padding:8px; border-radius:6px; margin-bottom:10px; border:1px solid #ffeeba;">
             <div style="font-size:11px; font-weight:bold; color:#856404; margin-bottom:4px; display:flex; justify-content:space-between;">
-                <span>SCROLL DELAY (Seconds)</span>
+                <span>🛑 AUTO-STOP TIME (Optional)</span>
+            </div>
+            <input type="time" id="stop-time-input" style="
+                width: 100%; padding: 6px; border: 1px solid #999; border-radius: 4px; font-size: 14px; text-align: center;
+                color: #000000 !important; background: #ffffff !important; font-weight: bold;
+            ">
+            <div style="font-size:11px; font-weight:bold; color:#856404; margin-top:8px; display:flex; justify-content:space-between;">
+                <span>⏳ SCROLL DELAY (Seconds)</span>
                 <span id="delay-display" style="font-weight:normal; color:#856404;">8.2s</span>
             </div>
             <input type="number" id="delay-input" step="0.1" min="1" value="8.2" style="
@@ -81,7 +87,7 @@ function injectSimpleUI() {
 
         <div style="margin-bottom:10px; display:flex; gap:8px;">
             <button id="btn-scrape-posts" style="flex: 1; padding: 8px; background: #9b59b6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">
-                ⚡ ONCE
+                ⚡ POSTS
             </button>
             <button id="btn-scrape-comments" style="flex: 1; padding: 8px; background: #3498db; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">
                 💬 COMMENTS
@@ -90,7 +96,7 @@ function injectSimpleUI() {
 
         <div id="v7-log" style="
             height: 120px; overflow-y: auto; background: #2c3e50; border: 1px solid #34495e; padding: 8px; font-size: 11px; color: #ecf0f1; border-radius: 4px; font-family: monospace;
-        ">Ready. Set delay inputs above.</div>
+        ">Ready. Set Stop Time above.</div>
     `;
 
     document.body.appendChild(div);
@@ -98,8 +104,9 @@ function injectSimpleUI() {
     // --- LOGIC ---
     const inputEl = document.getElementById('hashtag-input');
     const delayEl = document.getElementById('delay-input');
+    const stopTimeEl = document.getElementById('stop-time-input');
 
-    // Restore Config
+    // Restore Logic (Hashtag, Delay, Stop Time)
     const savedTag = localStorage.getItem('sticky_hashtag');
     if (savedTag) inputEl.value = savedTag;
 
@@ -109,7 +116,13 @@ function injectSimpleUI() {
         document.getElementById('delay-display').innerText = savedDelay + 's';
     }
 
+    const savedStopTime = localStorage.getItem('sticky_stop_time');
+    if (savedStopTime) stopTimeEl.value = savedStopTime;
+
+    // Listeners
     inputEl.addEventListener('input', (e) => localStorage.setItem('sticky_hashtag', e.target.value.trim()));
+    stopTimeEl.addEventListener('input', (e) => localStorage.setItem('sticky_stop_time', e.target.value));
+
     delayEl.addEventListener('input', (e) => {
         let val = parseFloat(e.target.value);
         if (val < 1) val = 1;
@@ -162,6 +175,26 @@ async function toggleSmartBot() {
 
 async function runSmartLoop() {
     if (!isSmartRunning) return;
+
+    // 0. CHECK TIME STOP
+    const stopTimeInput = document.getElementById('stop-time-input');
+    if (stopTimeInput && stopTimeInput.value) {
+        const [h, m] = stopTimeInput.value.split(':');
+        const now = new Date();
+        const target = new Date();
+        target.setHours(h, m, 0, 0);
+
+        // If target is earlier than now (e.g. set 14:00 when it's 16:00), ignore unless it's for tomorrow?
+        // Simple logic: If now >= target, STOP. User should ensure target is in future.
+        if (now >= target) {
+            // Avoid stopping immediately if user JUST set it slightly in past? No, strict is better.
+            log(`🛑 STOP TIME (${stopTimeInput.value}) REACHED! Stopping Bot.`, 'error');
+            toggleSmartBot(); // Stop
+            return;
+        }
+    }
+
+    // 1. Check Batch Limit
     const limit = randomInt(DEFAULT_CONFIG.BATCH_LIMIT_MIN, DEFAULT_CONFIG.BATCH_LIMIT_MAX);
     if (smartStats.batchCount >= limit) {
         log(`🧊 Batch Limit (${limit}) Reached! Cooling...`, "warn");
@@ -171,11 +204,14 @@ async function runSmartLoop() {
         log("🔥 Waking up!", "success");
     }
     if (!isSmartRunning) return;
+
+    // 2. Scroll
     window.scrollTo(0, document.body.scrollHeight);
     const userDelaySec = parseFloat(localStorage.getItem('sticky_delay')) || DEFAULT_CONFIG.SCROLL_DELAY_SEC;
     const delayMs = (userDelaySec * 1000) + randomInt(0, DEFAULT_CONFIG.JITTER_MS);
     log(`⏳ Waiting ${Math.round(delayMs / 100) / 10}s...`);
     await sleep(delayMs);
+
     if (!isSmartRunning) return;
     scrapeVisiblePosts(true);
     smartStats.batchCount++;
@@ -214,7 +250,6 @@ function scrapeVisiblePosts(isSilent = false) {
 
 async function scrapeVisibleComments(isAuto = false) {
     if (isAuto) {
-        // Show banner
         log('🤖 AUTO-SCRAPING COMMENTS (Reading Hash)...', 'success');
         await sleep(1000);
     } else {
@@ -223,17 +258,12 @@ async function scrapeVisibleComments(isAuto = false) {
 
     const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
-    // SCROLL LOOP for DEEP SCRAPE
-    // Try to find the sticky dialog or just scroll window
+    // SCROLL LOOP
     for (let i = 0; i < 5; i++) {
         log(`📜 Deep Scroll ${i + 1}/5...`);
-        // If it's a modal
         const dialog = document.querySelector('div[role="dialog"] div[style*="overflow"]');
-        if (dialog) {
-            dialog.scrollTo(0, dialog.scrollHeight);
-        } else {
-            window.scrollBy(0, 800);
-        }
+        if (dialog) dialog.scrollTo(0, dialog.scrollHeight);
+        else window.scrollBy(0, 800);
         await sleep(1500);
     }
 
@@ -243,7 +273,6 @@ async function scrapeVisibleComments(isAuto = false) {
         const text = li.innerText;
         if (text.length > 5 && !seen.has(text.substring(0, 10))) {
             seen.add(text.substring(0, 10));
-            // Naive extraction (better than nothing)
             const lines = text.split('\n');
             comments.push({
                 id: Math.random(),
@@ -257,9 +286,7 @@ async function scrapeVisibleComments(isAuto = false) {
     log(`📦 Found ${comments.length} comments.`);
     if (comments.length > 0) {
         uploadData(comments, 'UPLOAD_COMMENTS', false);
-        if (isAuto) {
-            log('✅ Auto-Action Complete. You can close this tab.', 'success');
-        }
+        if (isAuto) log('✅ Auto-Action Complete.', 'success');
     }
     else log('⚠️ No comments found.');
 }
