@@ -1,0 +1,8 @@
+{
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "https://insta-backend-samarth-shekhars-projects.vercel.app/api/$1"
+        }
+    ]
+}
