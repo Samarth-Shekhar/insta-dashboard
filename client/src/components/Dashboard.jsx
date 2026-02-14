@@ -306,23 +306,21 @@ const Dashboard = () => {
                                                     >
                                                         🤖 Auto-Scrape Comments
                                                     </button>
-                                                    💬 Scrape Comments
-                                                </button>
-                                            </td>
+                                                </td>
                                             </tr>
-                                ))
-                                ) : (
-                                <tr>
-                                    <td colSpan="4" className="p-12 text-center text-gray-400 italic">No hashtag data yet. Use "Crawl Hashtag" in extension.</td>
-                                </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="4" className="p-12 text-center text-gray-400 italic">No hashtag data yet. Use "Crawl Hashtag" in extension.</td>
+                                        </tr>
                                     )}
-                            </tbody>
-                        </table>
-                    </div>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
+            </div>
         </div>
-        </div >
     );
 };
 
