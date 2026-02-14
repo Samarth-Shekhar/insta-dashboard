@@ -299,32 +299,30 @@ const Dashboard = () => {
                                                 <td className="p-4">
                                                     <button
                                                         onClick={() => {
-                                                            if (window.confirm(`Start scraping comments for this post?\n${post.url}`)) {
-                                                                // Redirect to post so extension can scrape comments
-                                                                // Or trigger backend
-                                                                alert('Feature: Opening post. Please click "💬 COMMENTS" in scraper extension!');
-                                                                window.open(post.url, '_blank');
-                                                            }
+                                                            // Trigger Extension Auto-Scrape via Hash
+                                                            window.open(`${post.url}#scrape_comments`, '_blank');
                                                         }}
                                                         className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded hover:bg-indigo-700 font-medium flex items-center gap-1"
                                                     >
-                                                        💬 Scrape Comments
+                                                        🤖 Auto-Scrape Comments
                                                     </button>
-                                                </td>
+                                                    💬 Scrape Comments
+                                                </button>
+                                            </td>
                                             </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="4" className="p-12 text-center text-gray-400 italic">No hashtag data yet. Use "Crawl Hashtag" in extension.</td>
-                                        </tr>
+                                ))
+                                ) : (
+                                <tr>
+                                    <td colSpan="4" className="p-12 text-center text-gray-400 italic">No hashtag data yet. Use "Crawl Hashtag" in extension.</td>
+                                </tr>
                                     )}
-                                </tbody>
-                            </table>
-                        </div>
+                            </tbody>
+                        </table>
+                    </div>
                     </div>
                 )}
-            </div>
         </div>
+        </div >
     );
 };
 
