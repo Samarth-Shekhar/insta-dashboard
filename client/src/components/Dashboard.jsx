@@ -179,13 +179,19 @@ const Dashboard = () => {
                     <div className="flex gap-2">
                         <button
                             onClick={() => setActiveTab('comments')}
-                            className={`px-6 py-2.5 rounded-lg font-medium transition-all ${activeTab === 'comments' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'comments' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         >
-                            Comments Data
+                            Generic Comments
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('hashtag_comments')}
+                            className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'hashtag_comments' ? 'bg-teal-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                            #Hashtag Comments
                         </button>
                         <button
                             onClick={() => setActiveTab('hashtags')}
-                            className={`px-6 py-2.5 rounded-lg font-medium transition-all ${activeTab === 'hashtags' ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'hashtags' ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         >
                             Hashtag Posts
                         </button>
@@ -198,7 +204,54 @@ const Dashboard = () => {
                     </div>
                 )}
 
-                {/* COMMENTS TAB */}
+                {/* HASHTAG COMMENTS TAB (NEW) */}
+                {activeTab === 'hashtag_comments' && (
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-gray-800">Hashtag Scraped Comments</h2>
+                            <div className="flex gap-2">
+                                <button onClick={exportComments} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Export CSV</button>
+                                <button onClick={fetchStoredComments} className="px-4 py-2 text-sm bg-gray-50 text-gray-600 border rounded hover:bg-gray-100">↻ Refresh</button>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-gray-200">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Hashtag</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Username</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase w-1/3">Comment</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Date</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Link</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {comments.filter(c => c.hashtag).length > 0 ? (
+                                        comments.filter(c => c.hashtag).map(c => (
+                                            <tr key={c.id} className="hover:bg-gray-50">
+                                                <td className="p-4">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-800">
+                                                        #{c.hashtag}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 font-medium text-blue-600">{c.username}</td>
+                                                <td className="p-4 text-gray-700">{c.text}</td>
+                                                <td className="p-4 text-sm text-gray-500">{new Date(c.timestamp).toLocaleString()}</td>
+                                                <td className="p-4 text-xs">
+                                                    <a href={c.mediaId} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">View</a>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr><td colSpan="5" className="p-12 text-center text-gray-400">No hashtag-specific comments found yet. Use Auto-Scrape.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* GENERIC COMMENTS TAB */}
                 {activeTab === 'comments' && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
                         <div className="flex justify-between items-center mb-6">

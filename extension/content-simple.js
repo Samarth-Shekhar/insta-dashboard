@@ -1,7 +1,7 @@
-// Insta-Extractor v8.5 - "Robust Comments" Edition
-// Features: Enhanced Selectors, Hashtag Tracking, Auto-Stop Time
+// Insta-Extractor v8.6 - "Nuclear Text" Edition
+// Features: Text-Based Scraping (DOM-agnostic), 3rd Tab Support
 
-console.log('🚀 Insta-Extractor v8.5 Loaded');
+console.log('🚀 Insta-Extractor v8.6 Loaded');
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -24,7 +24,6 @@ const DEFAULT_CONFIG = {
 
 // --- UI INJECTION ---
 function injectSimpleUI() {
-    // Auto-Run Check
     if (!hasAutoRun && window.location.hash.includes('#scrape_comments')) {
         hasAutoRun = true;
         console.log('🤖 Auto-Scrape Triggered by URL!');
@@ -43,7 +42,7 @@ function injectSimpleUI() {
 
     div.innerHTML = `
         <h3 style="margin:0 0 10px; color:#8e44ad; display:flex; justify-content:space-between; align-items:center;">
-            <span>🤖 Scraper v8.5</span>
+            <span>🤖 Scraper v8.6</span>
             <span style="font-size:12px; color:#999; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">❌</span>
         </h3>
         
@@ -113,7 +112,7 @@ function injectSimpleUI() {
     }
     if (stopTimeEl) stopTimeEl.value = localStorage.getItem('sticky_stop_time') || '';
 
-    // Listeners
+    // Listeners and Bindings
     inputEl.addEventListener('input', (e) => localStorage.setItem('sticky_hashtag', e.target.value.trim()));
     stopTimeEl.addEventListener('input', (e) => localStorage.setItem('sticky_stop_time', e.target.value));
     delayEl.addEventListener('input', (e) => {
@@ -183,7 +182,6 @@ async function runSmartLoop() {
         }
     }
 
-    // Scroll & Scrape Logic (Standard)
     const limit = randomInt(DEFAULT_CONFIG.BATCH_LIMIT_MIN, DEFAULT_CONFIG.BATCH_LIMIT_MAX);
     if (smartStats.batchCount >= limit) {
         log(`🧊 Batch Limit (${limit}) Reached! Cooling...`, "warn");
@@ -235,13 +233,13 @@ function scrapeVisiblePosts(isSilent = false) {
     else if (!isSilent) log('⚠️ No visible posts.');
 }
 
-// --- ROBUST COMMENT SCRAPING ---
+// --- NUCLEAR COMMENT SCRAPING ---
 async function scrapeVisibleComments(isAuto = false) {
     let targetHashtag = '';
+    const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
     if (isAuto) {
         log('🤖 AUTO-SCRAPING COMMENTS...', 'success');
-        // Parse Hash for Tag: #scrape_comments&tag=foodie
         const hash = window.location.hash;
         if (hash.includes('&tag=')) {
             targetHashtag = hash.split('&tag=')[1] || '';
@@ -252,24 +250,21 @@ async function scrapeVisibleComments(isAuto = false) {
         log('💬 Scanning comments...');
     }
 
-    const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
-
-    // SCROLL LOOP (Try to trigger lazy load)
+    // SCROLL LOOP
     for (let i = 0; i < 6; i++) {
         log(`📜 Deep Scroll ${i + 1}/6...`);
-        // Try multiple scroll targets
         let scrolled = false;
 
-        // 1. Specific Dialog
+        // Find MAIN scroll container
         const dialog = document.querySelector('div[role="dialog"] div[style*="overflow"]');
         if (dialog) {
             dialog.scrollTo(0, dialog.scrollHeight);
             scrolled = true;
         }
 
-        // 2. Generic Scrollable Containers (common in modals)
+        // Try generic classes
         if (!scrolled) {
-            document.querySelectorAll('div[class*="x1n2onr6"]').forEach(div => {
+            document.querySelectorAll('div[class*="x1n2onr6"], div[class*="xyamay9"]').forEach(div => {
                 if (div.scrollHeight > div.clientHeight) {
                     div.scrollTop = div.scrollHeight;
                     scrolled = true;
@@ -277,15 +272,12 @@ async function scrapeVisibleComments(isAuto = false) {
             });
         }
 
-        // 3. Fallback: Window Scroll
+        // Fallback
         if (!scrolled) window.scrollBy(0, 800);
 
-        // 4. Look for "Load more comments" button (usually circle icon with +)
+        // Click "Load more"
         const loadMoreBtn = document.querySelector('svg[aria-label="Load more comments"]');
-        if (loadMoreBtn) {
-            log('🖱️ Clicking "Load more"...');
-            loadMoreBtn.parentElement.click();
-        }
+        if (loadMoreBtn) loadMoreBtn.parentElement.click();
 
         await sleep(1500);
     }
@@ -293,47 +285,72 @@ async function scrapeVisibleComments(isAuto = false) {
     const comments = [];
     const seen = new Set();
 
-    // BROAD SELECTOR STRATEGY
-    // Look for list items, but also just spans with text inside container
-    // Instagram comments are often structured: ul > div > div > div...
+    // NUCLEAR EXTRACTION STRATEGY
+    // 1. Get ALL text nodes in the dialog
+    const container = document.querySelector('div[role="dialog"]') || document.body;
 
-    // Strategy A: UL LI (Classic)
-    document.querySelectorAll('ul li').forEach(li => processNode(li));
+    // 2. Fallback to extracting from SPANs with dir="auto" (Comments usually have this)
+    const candidates = container.querySelectorAll('span[dir="auto"], div[dir="auto"]');
 
-    // Strategy B: Div with role="listitem" (Modern) (unlikely but possible)
-    document.querySelectorAll('div[role="listitem"]').forEach(div => processNode(div));
+    if (candidates.length > 0) {
+        log(`🔎 Found ${candidates.length} text blocks. Parsng...`);
+        candidates.forEach(node => {
+            const text = node.innerText.trim();
+            if (text.length < 2) return;
+            if (text.match(/^(Reply|See translation|View more|Like|Time|hours|days|w|h|m|s)$/i)) return; // Filters
 
-    // Strategy C: Catch-all visible text blocks in the dialog area? Too risky.
+            // Try to find a sibling or parent that looks like a username
+            // Usually username is a Link or an h2/h3 nearby
+            let username = 'User';
 
-    function processNode(node) {
-        try {
-            const text = node.innerText;
-            // Basic filtering: Must have length, not be a button
-            if (text.length > 2 && !text.includes('Reply') && !seen.has(text.substring(0, 10))) {
-                seen.add(text.substring(0, 10));
+            // HEURISTIC: Username is often the previous sibling's text or in a container above
+            // This is hard. But let's try a simpler approach.
+            // Just capturing the text is better than nothing.
 
-                // Username extraction heuristic: First line is often username
-                const lines = text.split('\n').filter(l => l.trim().length > 0);
-                if (lines.length >= 1) {
-                    // Skip if first line is "Verified" or "Follow"
-                    let user = lines[0];
-                    let content = lines.slice(1).join(' ');
-
-                    // Cleanup
-                    if (user.includes('Verified')) user = lines[1] || user;
-
-                    if (content.length > 0) {
-                        comments.push({
-                            id: Math.random(),
-                            username: user,
-                            text: content,
-                            mediaId: mediaId,
-                            hashtag: targetHashtag // Add the hashtag!
-                        });
+            // If the text is long, it's likely a comment.
+            // If we can't find a username, we'll label it "Scraped User".
+            // Or look for an <a> tag in the parent tree
+            let parent = node.parentElement;
+            let foundUser = false;
+            while (parent && parent !== container && !foundUser) {
+                const link = parent.querySelector('a, h3');
+                if (link && link.innerText !== text) {
+                    username = link.innerText;
+                    foundUser = true;
+                }
+                parent = parent.parentElement;
+                if (!foundUser && parent && parent.innerText && parent.innerText.split('\n')[0] !== text) {
+                    // Maybe parent text starts with username?
+                    const lines = parent.innerText.split('\n');
+                    if (lines.length > 1 && lines[1] === text) {
+                        username = lines[0];
+                        foundUser = true;
                     }
                 }
             }
-        } catch (e) { }
+
+            if (!seen.has(text.substring(0, 20))) {
+                seen.add(text.substring(0, 20));
+                comments.push({
+                    id: Math.random(),
+                    username: username.substring(0, 30), // truncated
+                    text: text,
+                    mediaId: mediaId,
+                    hashtag: targetHashtag
+                });
+            }
+        });
+    }
+
+    // BACKUP STRATEGY: UL LI
+    if (comments.length === 0) {
+        log('⚠️ Generic parser failed. Trying Lists...');
+        document.querySelectorAll('ul li').forEach(li => {
+            const t = li.innerText;
+            if (t.length > 5 && !seen.has(t.substring(0, 10))) {
+                comments.push({ id: Math.random(), username: 'ListUser', text: t, mediaId, hashtag: targetHashtag });
+            }
+        });
     }
 
     log(`📦 Found ${comments.length} comments.`);
@@ -343,9 +360,6 @@ async function scrapeVisibleComments(isAuto = false) {
     }
     else {
         log('⚠️ No comments found. Try manually opening comments first.', 'warn');
-        // Fallback: If 0 comments, maybe it's actually empty?
-        const emptyState = document.body.innerText.includes('No comments yet');
-        if (emptyState) log('ℹ️ Post truly has no comments.');
     }
 }
 
