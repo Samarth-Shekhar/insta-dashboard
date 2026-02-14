@@ -29,13 +29,42 @@ if (require.main === module) {
 
 module.exports = app;
 
-// Database Connection
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-})
-    .then(() => console.log('MongoDB connected'))
-    .catch(err => console.error(err));
+// Database Connection (Cached for Serverless)
+let cachedDb = null;
+
+async function connectToDatabase() {
+    if (cachedDb) {
+        return cachedDb;
+    }
+
+    // Prepare Mongoose options
+    const opts = {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        bufferCommands: false, // Disable Mongoose buffering
+    };
+
+    try {
+        const mongooseInstance = await mongoose.connect(process.env.MONGO_URI, opts);
+        cachedDb = mongooseInstance;
+        console.log('MongoDB Connected');
+        return cachedDb;
+    } catch (e) {
+        console.error('MongoDB Connection Error:', e);
+        throw e;
+    }
+}
+
+// Ensure DB is connected for every request
+app.use(async (req, res, next) => {
+    try {
+        await connectToDatabase();
+        next();
+    } catch (error) {
+        console.error('DB Middleware Error:', error);
+        res.status(500).json({ error: 'Database connection failed' });
+    }
+});
 
 // Extension Import Routes
 app.get('/api/comments/import', (req, res) => res.json({ status: 'ok' }));

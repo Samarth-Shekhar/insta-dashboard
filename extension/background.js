@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 
         // Fetch from Background Script (Bypasses Page CSP)
-        fetch('https://insta-backend-samarth-shekhars-projects.vercel.app/api/hashtags/import', {
+        fetch('https://insta-backend-azure.vercel.app/api/hashtags/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ posts: request.data })
@@ -34,7 +34,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === 'UPLOAD_COMMENTS') {
         console.log('[Background] Uploading comments:', request.data?.length);
-        fetch('https://insta-backend-samarth-shekhars-projects.vercel.app/api/comments/import', {
+        fetch('https://insta-backend-azure.vercel.app/api/comments/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ comments: request.data })

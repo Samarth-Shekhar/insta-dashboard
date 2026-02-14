@@ -271,12 +271,14 @@ function uploadData(data, actionType) {
     log(`📤 Uploading ${data.length} items...`);
     try {
         if (!chrome || !chrome.runtime) { log('❌ Reload Extension!'); return; }
-        chrome.runtime.sendMessage({ action: actionType, data: data }, (res) => {
+        chrome.runtime.sendMessage({ action: actionType, data: data }, (response) => {
             if (chrome.runtime.lastError) { log('❌ Connection Error'); return; }
-            if (res && (res.success || res.count)) {
-                log(`✅ SUCCESS! Saved ${res.count || data.length}.`);
-                alert(`✅ Success! Saved ${res.count || data.length} items.`);
-            } else log('❌ Upload Failed');
+            if (response && (response.success || response.count)) {
+                log(`✅ SUCCESS! Saved ${response.count || data.length}.`);
+                alert(`✅ Success! Saved ${response.count || data.length} items.`);
+            } else {
+                log('❌ Upload Failed: ' + (response?.error || 'Unknown Error'));
+            }
         });
     } catch (e) { log('❌ Error: ' + e.message); }
 }
