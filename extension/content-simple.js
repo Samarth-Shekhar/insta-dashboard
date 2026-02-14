@@ -1,7 +1,134 @@
-// Insta-Extractor v8.6 - "Nuclear Text" Edition
-// Features: Text-Based Scraping (DOM-agnostic), 3rd Tab Support
+// --- NUCLEAR COMMENT SCRAPING ---
+async function scrapeVisibleComments(isAuto = false) {
+    let targetHashtag = '';
+    const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
-console.log('🚀 Insta-Extractor v8.6 Loaded');
+    if (isAuto) {
+        log('🤖 AUTO-SCRAPING COMMENTS...', 'success');
+        const hash = window.location.hash;
+        if (hash.includes('&tag=')) {
+            targetHashtag = hash.split('&tag=')[1] || '';
+            log(`🏷️ Hashtag Detected: #${targetHashtag}`);
+        }
+        await sleep(1500);
+    } else {
+        log('💬 Scanning comments...');
+    }
+
+    // SCROLL LOOP
+    for (let i = 0; i < 6; i++) {
+        log(`📜 Deep Scroll ${i + 1}/6...`);
+        let scrolled = false;
+
+        // Find MAIN scroll container
+        const dialog = document.querySelector('div[role="dialog"] div[style*="overflow"]');
+        if (dialog) {
+            dialog.scrollTo(0, dialog.scrollHeight);
+            scrolled = true;
+        }
+
+        // Try generic classes for scrollable areas
+        if (!scrolled) {
+            document.querySelectorAll('div[class*="x1n2onr6"], div[class*="xyamay9"]').forEach(div => {
+                // Ensure it's not the main page scroll if we are in a modal
+                if (div.scrollHeight > div.clientHeight && div.clientHeight > 100) {
+                    div.scrollTop = div.scrollHeight;
+                    scrolled = true;
+                }
+            });
+        }
+
+        // Fallback: only if NO dialog is present
+        if (!scrolled && !document.querySelector('div[role="dialog"]')) window.scrollBy(0, 800);
+
+        // Click "Load more"
+        const loadMoreBtn = document.querySelector('svg[aria-label="Load more comments"]');
+        if (loadMoreBtn) loadMoreBtn.parentElement.click();
+
+        await sleep(1500);
+    }
+
+    const comments = [];
+    const seen = new Set();
+    const UI_BLACKLIST = new Set(['Home', 'Search', 'Explore', 'Reels', 'Messages', 'Notifications', 'Create', 'Profile', 'More', 'Meta', 'About', 'Blog', 'Jobs', 'Help', 'API', 'Privacy', 'Terms', 'Locations', 'Instagram Lite', 'Threads', 'Contact Uploading', 'Meta Verified', 'Follow', 'Followers', 'Following', 'Log in', 'Sign up', 'Report']);
+
+    // NUCLEAR EXTRACTION STRATEGY
+    // 1. Target the Dialog IF it exists, otherwise strict container search
+    let container = document.querySelector('div[role="dialog"]');
+
+    // If no dialog, try to find the comment column specifically
+    if (!container) {
+        // Look for the area with the comment input field
+        const inputArea = document.querySelector('textarea');
+        if (inputArea) {
+            // Traverse up to find the common container for comments
+            let p = inputArea.parentElement;
+            while (p && p.childElementCount < 5) p = p.parentElement; // Heuristic
+            if (p) container = p.parentElement; // Go one higher
+        }
+    }
+
+    // Capture candidates (Text nodes with dir="auto" are best for user content)
+    // If container is null, we DO NOT fall back to body to avoid sidebar scraping
+    const searchContext = container || document.querySelector('main') || null;
+
+    if (!searchContext) {
+        log('⚠️ Could not locate comment section. Aborting to avoid garbage data.', 'error');
+        return;
+    }
+
+    const candidates = searchContext.querySelectorAll('span[dir="auto"], div[dir="auto"], span.x1lliihq');
+
+    if (candidates.length > 0) {
+        log(`🔎 Found ${candidates.length} text blocks. Parsng...`);
+        candidates.forEach(node => {
+            const text = node.innerText.trim();
+            if (text.length < 2) return;
+
+            // Strict UI Filter
+            if (UI_BLACKLIST.has(text)) return;
+            if (text.match(/^(Reply|See translation|View more|Like|Time|hours|days|w|h|m|s|Edited|Pinned)$/i)) return;
+
+            // Heuristic: Is this inside a nav?
+            if (node.closest('nav') || node.closest('header')) return;
+
+            // Username Mapping
+            let username = 'User';
+            let parent = node.parentElement;
+            let foundUser = false;
+
+            // Look for nearby bold text or links
+            while (parent && parent !== searchContext && !foundUser) {
+                const link = parent.querySelector('a, span[style*="font-weight: 600"]');
+                if (link && link.innerText !== text && !UI_BLACKLIST.has(link.innerText)) {
+                    username = link.innerText;
+                    foundUser = true;
+                }
+                parent = parent.parentElement;
+            }
+
+            if (!seen.has(text.substring(0, 20))) {
+                seen.add(text.substring(0, 20));
+                comments.push({
+                    id: Math.random(),
+                    username: username.substring(0, 30),
+                    text: text,
+                    mediaId: mediaId,
+                    hashtag: targetHashtag
+                });
+            }
+        });
+    }
+
+    log(`📦 Found ${comments.length} potential comments.`);
+    if (comments.length > 0) {
+        uploadData(comments, 'UPLOAD_COMMENTS', false);
+        if (isAuto) log('✅ Auto-Action Complete.', 'success');
+    }
+    else {
+        log('⚠️ No unique comments found. Check filters.', 'warn');
+    }
+}
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

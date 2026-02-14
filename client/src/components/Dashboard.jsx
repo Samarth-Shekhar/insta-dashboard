@@ -207,13 +207,30 @@ const Dashboard = () => {
                 {/* HASHTAG COMMENTS TAB (NEW) */}
                 {activeTab === 'hashtag_comments' && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-gray-800">Hashtag Scraped Comments</h2>
-                            <div className="flex gap-2">
-                                <button onClick={exportComments} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Export CSV</button>
-                                <button onClick={fetchStoredComments} className="px-4 py-2 text-sm bg-gray-50 text-gray-600 border rounded hover:bg-gray-100">↻ Refresh</button>
+                        <div className="flex flex-col mb-6 gap-4">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-bold text-gray-800">Hashtag Scraped Comments</h2>
+                                <div className="flex gap-2">
+                                    <button onClick={exportComments} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Export CSV</button>
+                                    <button onClick={fetchStoredComments} className="px-4 py-2 text-sm bg-gray-50 text-gray-600 border rounded hover:bg-gray-100">↻ Refresh</button>
+                                </div>
+                            </div>
+
+                            {/* STATS BAR */}
+                            <div className="bg-teal-50 border border-teal-100 rounded-lg p-4 flex flex-wrap gap-4 items-center">
+                                <span className="font-bold text-teal-800 text-sm">📊 Stats:</span>
+                                {Object.entries(comments.reduce((acc, c) => {
+                                    if (c.hashtag) acc[c.hashtag] = (acc[c.hashtag] || 0) + 1;
+                                    return acc;
+                                }, {})).map(([tag, count]) => (
+                                    <span key={tag} className="px-3 py-1 bg-white border border-teal-200 rounded-full text-xs font-medium text-teal-700 shadow-sm">
+                                        #{tag}: <span className="font-bold">{count}</span>
+                                    </span>
+                                ))}
+                                {comments.filter(c => c.hashtag).length === 0 && <span className="text-xs text-teal-600 italic">No hashtag stats yet.</span>}
                             </div>
                         </div>
+
                         <div className="overflow-x-auto rounded-lg border border-gray-200">
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-gray-50">
