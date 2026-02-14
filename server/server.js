@@ -8,9 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware - MUST be before routes to parse JSON body
-const app = express();
-
-// Middleware
+// Middleware (App already declared above)
 app.use(cors({
     origin: '*', // Allow ALL origins (Crucial for Chrome Extensions)
     credentials: true,
