@@ -5,17 +5,27 @@ const Dashboard = () => {
     const [activeTab, setActiveTab] = useState('comments');
     const [comments, setComments] = useState([]);
     const [hashtags, setHashtags] = useState([]);
-    const [currentHashtag, setCurrentHashtag] = useState(''); // Most recent hashtag
+    const [currentHashtag, setCurrentHashtag] = useState('');
 
     const [loading, setLoading] = useState(false);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [search, setSearch] = useState('');
     const [currentMediaId, setCurrentMediaId] = useState('');
+    const [error, setError] = useState(null);
 
     // --- BULK ACTION STATE ---
     const [selectedPosts, setSelectedPosts] = useState(new Set());
     const [isBatchScraping, setIsBatchScraping] = useState(false);
+
+    useEffect(() => {
+        if (activeTab === 'comments') {
+            fetchStoredComments();
+        } else {
+            fetchStoredHashtags();
+        }
+    }, [page, currentMediaId, activeTab]);
+    // removed 'search' from dependency to allow client-side filtering for hashtags
 
     // --- BULK HELPERS ---
     const getFilteredHashtags = () => {
@@ -57,20 +67,12 @@ const Dashboard = () => {
             window.open(`${post.url}#scrape_comments`, '_blank');
             i++;
 
-            // Wait 12 seconds before next
+            // Wait 12 seconds
             setTimeout(processNext, 12000);
         };
 
         processNext();
     };
-
-    useEffect(() => {
-        if (activeTab === 'comments') {
-            fetchStoredComments();
-        } else {
-            fetchStoredHashtags();
-        }
-    }, [page, search, currentMediaId, activeTab]);
 
     const fetchStoredComments = async () => {
         try {
@@ -84,75 +86,49 @@ const Dashboard = () => {
         }
     };
 
-    const [error, setError] = useState(null);
-
     const fetchStoredHashtags = async () => {
         setLoading(true);
         setError(null);
         try {
-            console.log('Dashboard: Fetching hashtags...');
             const { data } = await api.get('/hashtags');
-            console.log('Dashboard: Received:', data);
-
             if (Array.isArray(data) && data.length > 0) {
-                // Sort by timestamp (most recent first)
-                const sorted = [...data].sort((a, b) =>
-                    new Date(b.timestamp) - new Date(a.timestamp)
-                );
-
-                // Get all unique hashtags
-                const uniqueHashtags = [...new Set(sorted.map(post => post.searchQuery))].filter(Boolean);
-
-                // Set all posts (no filtering)
+                const sorted = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 setHashtags(sorted);
-
-                // Set current hashtag to show in header (most recent)
+                const uniqueHashtags = [...new Set(sorted.map(post => post.searchQuery))].filter(Boolean);
                 if (uniqueHashtags.length > 0) {
                     setCurrentHashtag(uniqueHashtags.map(tag => `#${tag}`).join(', '));
                 } else {
                     setCurrentHashtag('');
                 }
-
-                console.log(`Showing ${sorted.length} posts from ${uniqueHashtags.length} hashtags`);
             } else {
                 setHashtags([]);
                 setCurrentHashtag('');
             }
         } catch (error) {
-            console.error('Failed to fetch hashtags', error);
             setError(`Failed to load data: ${error.message}`);
             setHashtags([]);
-            setCurrentHashtag('');
         } finally {
             setLoading(false);
         }
     };
 
-    // Kept for backward compatibility
-    const handleFetchFromInstagram = async () => {
-        // ... (existing logic)
-    };
-
     const clearHashtags = async () => {
-        if (!window.confirm('Are you sure you want to clear ALL hashtag data? This cannot be undone.')) return;
-
+        if (!window.confirm('Clear ALL data?')) return;
         setLoading(true);
         try {
             await api.delete('/hashtags');
             setHashtags([]);
             setCurrentHashtag('');
-            alert('Hashtag data cleared successfully!');
+            alert('Cleared!');
         } catch (error) {
-            console.error('Failed to clear data', error);
-            alert('Failed to clear data: ' + error.message);
+            alert('Failed to clear: ' + error.message);
         } finally {
             setLoading(false);
         }
     };
 
     const exportHashtags = () => {
-        if (hashtags.length === 0) return alert('No data to export');
-
+        if (hashtags.length === 0) return alert('No data');
         const headers = ['URL', 'Caption', 'Likes', 'Comments', 'Hashtag', 'Date'];
         const csvContent = [
             headers.join(','),
@@ -165,19 +141,15 @@ const Dashboard = () => {
                 new Date(p.timestamp).toISOString()
             ].join(','))
         ].join('\n');
-
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'hashtag_posts.csv');
-        document.body.appendChild(link);
+        link.href = URL.createObjectURL(blob);
+        link.download = 'hashtag_posts.csv';
         link.click();
     };
 
     const exportComments = () => {
-        if (comments.length === 0) return alert('No comments to export');
-
+        if (comments.length === 0) return alert('No comments');
         const headers = ['Username', 'Comment', 'Date', 'Post URL', 'ID'];
         const csvContent = [
             headers.join(','),
@@ -189,13 +161,10 @@ const Dashboard = () => {
                 c.id
             ].join(','))
         ].join('\n');
-
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'comments_export.csv');
-        document.body.appendChild(link);
+        link.href = URL.createObjectURL(blob);
+        link.download = 'comments_export.csv';
         link.click();
     };
 
@@ -223,23 +192,61 @@ const Dashboard = () => {
                     </div>
                 </header>
 
-                {activeTab === 'hashtags' && error && (
+                {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
                         <strong>Error:</strong> {error}
                     </div>
+                )}
+
+                {/* COMMENTS TAB */}
+                {activeTab === 'comments' && (
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-gray-800">Scraped Comments</h2>
+                            <div className="flex gap-2">
+                                <button onClick={exportComments} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Export CSV</button>
+                                <button onClick={fetchStoredComments} className="px-4 py-2 text-sm bg-gray-50 text-gray-600 border rounded hover:bg-gray-100">↻ Refresh</button>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-gray-200">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Username</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase w-1/2">Comment</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Date</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Link</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {comments.map(c => (
+                                        <tr key={c.id} className="hover:bg-gray-50">
+                                            <td className="p-4 font-medium text-blue-600">{c.username}</td>
+                                            <td className="p-4 text-gray-700">{c.text}</td>
+                                            <td className="p-4 text-sm text-gray-500">{new Date(c.timestamp).toLocaleString()}</td>
+                                            <td className="p-4 text-xs">
+                                                <a href={c.mediaId} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">View</a>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {comments.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-gray-400">No comments found.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* HASHTAGS TAB */}
                 {activeTab === 'hashtags' && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
                         <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800">Hashtag Posts</h2>
-                                <p className="text-sm text-gray-500 mt-1">
-                                    {hashtags.length} posts loaded
-                                </p>
+                                <p className="text-sm text-gray-500 mt-1">{hashtags.length} posts loaded</p>
                             </div>
 
-                            {/* FILTERS & ACTIONS */}
                             <div className="flex flex-wrap gap-2 items-center">
-                                {/* Hashtag Filter */}
+                                {/* FILTER */}
                                 <select
                                     className="px-3 py-2 border rounded text-sm bg-gray-50 text-gray-700 font-medium"
                                     onChange={(e) => setSearch(e.target.value)}
@@ -251,7 +258,7 @@ const Dashboard = () => {
                                     ))}
                                 </select>
 
-                                {/* Bulk Scrape Button */}
+                                {/* BULK SCRAPE */}
                                 {selectedPosts.size > 0 && (
                                     <button
                                         onClick={handleBatchScrape}
@@ -263,24 +270,11 @@ const Dashboard = () => {
                                     </button>
                                 )}
 
-                                <button
-                                    onClick={clearHashtags}
-                                    className="px-4 py-2 text-sm bg-red-50 text-red-600 border border-red-100 rounded hover:bg-red-100 transition-colors"
-                                >
-                                    Clear Data
-                                </button>
-
-                                <button
-                                    onClick={fetchStoredHashtags}
-                                    disabled={loading}
-                                    className="px-3 py-2 text-sm border rounded hover:bg-gray-50 transition-colors"
-                                >
-                                    ↻ Refresh
-                                </button>
+                                <button onClick={clearHashtags} className="px-4 py-2 text-sm bg-red-50 text-red-600 border border-red-100 rounded hover:bg-red-100">Clear</button>
+                                <button onClick={fetchStoredHashtags} disabled={loading} className="px-3 py-2 text-sm border rounded hover:bg-gray-50">↻</button>
                             </div>
                         </div>
 
-                        {/* TABLE */}
                         <div className="overflow-x-auto rounded-lg border border-gray-200">
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-gray-50">
@@ -289,15 +283,15 @@ const Dashboard = () => {
                                             <input
                                                 type="checkbox"
                                                 onChange={toggleSelectAll}
-                                                checked={hashtags.length > 0 && selectedPosts.size === hashtags.filter(p => !search || p.searchQuery === search).length}
-                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                checked={hashtags.length > 0 && selectedPosts.size === getFilteredHashtags().length}
+                                                className="rounded"
                                             />
                                         </th>
-                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Post URL</th>
-                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Hashtag</th>
-                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Username</th>
-                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider w-1/4">Caption</th>
-                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Action</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Post URL</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Hashtag</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Username</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase w-1/4">Caption</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -309,7 +303,7 @@ const Dashboard = () => {
                                                         type="checkbox"
                                                         checked={selectedPosts.has(post.id)}
                                                         onChange={() => toggleSelectPost(post.id)}
-                                                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                        className="rounded"
                                                     />
                                                 </td>
                                                 <td className="p-4">
@@ -329,7 +323,7 @@ const Dashboard = () => {
                                                         onClick={() => window.open(`${post.url}#scrape_comments`, '_blank')}
                                                         className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded hover:bg-indigo-700 font-medium flex items-center gap-1 shadow-sm"
                                                     >
-                                                        🤖 Auto-Scrape
+                                                        🤖 Auto
                                                     </button>
                                                 </td>
                                             </tr>
@@ -337,7 +331,7 @@ const Dashboard = () => {
                                     ) : (
                                         <tr>
                                             <td colSpan="6" className="p-12 text-center text-gray-400 italic">
-                                                No posts found. {search ? `Try clearing filter/search.` : `Use the extension to scrape hashtags first.`}
+                                                No posts found. {search ? `Try clearing filter.` : `Use the extension to scrape hashtags first.`}
                                             </td>
                                         </tr>
                                     )}
