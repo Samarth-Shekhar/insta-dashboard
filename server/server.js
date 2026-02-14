@@ -8,12 +8,26 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware - MUST be before routes to parse JSON body
+const app = express();
+
+// Middleware
 app.use(cors({
-    origin: true, // Allow ALL origins (including instagram.com)
+    origin: '*', // Allow ALL origins (Crucial for Chrome Extensions)
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+
+// ... (routes stay the same)
+
+// Initial server start (Conditional for Vercel)
+if (require.main === module) {
+    const PORT = process.env.PORT || 5001;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+module.exports = app;
 
 // Database Connection
 mongoose.connect(process.env.MONGO_URI, {
