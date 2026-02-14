@@ -1,7 +1,7 @@
-// Insta-Extractor v8.4 - "Time Limit" Edition
-// Features: Auto-Stop at specific time
+// Insta-Extractor v8.5 - "Robust Comments" Edition
+// Features: Enhanced Selectors, Hashtag Tracking, Auto-Stop Time
 
-console.log('🚀 Insta-Extractor v8.4 Configurable Bot Loaded');
+console.log('🚀 Insta-Extractor v8.5 Loaded');
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -10,10 +10,9 @@ const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + mi
 // --- STATE ---
 let isSmartRunning = false;
 let smartStats = { batchCount: 0, total: 0 };
-let smartTimer = null;
 let hasAutoRun = false;
 
-// --- CONFIG DEFAULTS ---
+// --- CONFIG ---
 const DEFAULT_CONFIG = {
     SCROLL_DELAY_SEC: 8.2,
     JITTER_MS: 2000,
@@ -25,10 +24,11 @@ const DEFAULT_CONFIG = {
 
 // --- UI INJECTION ---
 function injectSimpleUI() {
-    if (!hasAutoRun && window.location.hash === '#scrape_comments') {
+    // Auto-Run Check
+    if (!hasAutoRun && window.location.hash.includes('#scrape_comments')) {
         hasAutoRun = true;
         console.log('🤖 Auto-Scrape Triggered by URL!');
-        setTimeout(() => scrapeVisibleComments(true), 2000);
+        setTimeout(() => scrapeVisibleComments(true), 2500);
     }
 
     if (document.getElementById('insta-scraper-v7')) return;
@@ -43,7 +43,7 @@ function injectSimpleUI() {
 
     div.innerHTML = `
         <h3 style="margin:0 0 10px; color:#8e44ad; display:flex; justify-content:space-between; align-items:center;">
-            <span>🤖 Scraper v8.4</span>
+            <span>🤖 Scraper v8.5</span>
             <span style="font-size:12px; color:#999; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">❌</span>
         </h3>
         
@@ -96,33 +96,26 @@ function injectSimpleUI() {
 
         <div id="v7-log" style="
             height: 120px; overflow-y: auto; background: #2c3e50; border: 1px solid #34495e; padding: 8px; font-size: 11px; color: #ecf0f1; border-radius: 4px; font-family: monospace;
-        ">Ready. Set Stop Time above.</div>
+        ">Ready.</div>
     `;
 
     document.body.appendChild(div);
 
-    // --- LOGIC ---
+    // --- RESTORE UI ---
     const inputEl = document.getElementById('hashtag-input');
     const delayEl = document.getElementById('delay-input');
     const stopTimeEl = document.getElementById('stop-time-input');
 
-    // Restore Logic (Hashtag, Delay, Stop Time)
-    const savedTag = localStorage.getItem('sticky_hashtag');
-    if (savedTag) inputEl.value = savedTag;
-
-    const savedDelay = localStorage.getItem('sticky_delay');
-    if (savedDelay) {
-        delayEl.value = savedDelay;
-        document.getElementById('delay-display').innerText = savedDelay + 's';
+    if (inputEl) inputEl.value = localStorage.getItem('sticky_hashtag') || '';
+    if (delayEl) {
+        delayEl.value = localStorage.getItem('sticky_delay') || '8.2';
+        document.getElementById('delay-display').innerText = delayEl.value + 's';
     }
-
-    const savedStopTime = localStorage.getItem('sticky_stop_time');
-    if (savedStopTime) stopTimeEl.value = savedStopTime;
+    if (stopTimeEl) stopTimeEl.value = localStorage.getItem('sticky_stop_time') || '';
 
     // Listeners
     inputEl.addEventListener('input', (e) => localStorage.setItem('sticky_hashtag', e.target.value.trim()));
     stopTimeEl.addEventListener('input', (e) => localStorage.setItem('sticky_stop_time', e.target.value));
-
     delayEl.addEventListener('input', (e) => {
         let val = parseFloat(e.target.value);
         if (val < 1) val = 1;
@@ -176,41 +169,33 @@ async function toggleSmartBot() {
 async function runSmartLoop() {
     if (!isSmartRunning) return;
 
-    // 0. CHECK TIME STOP
+    // CHECK STOP TIME
     const stopTimeInput = document.getElementById('stop-time-input');
     if (stopTimeInput && stopTimeInput.value) {
         const [h, m] = stopTimeInput.value.split(':');
         const now = new Date();
         const target = new Date();
         target.setHours(h, m, 0, 0);
-
-        // If target is earlier than now (e.g. set 14:00 when it's 16:00), ignore unless it's for tomorrow?
-        // Simple logic: If now >= target, STOP. User should ensure target is in future.
         if (now >= target) {
-            // Avoid stopping immediately if user JUST set it slightly in past? No, strict is better.
-            log(`🛑 STOP TIME (${stopTimeInput.value}) REACHED! Stopping Bot.`, 'error');
-            toggleSmartBot(); // Stop
+            log(`🛑 STOP TIME REACHED! Stopping.`, 'error');
+            toggleSmartBot();
             return;
         }
     }
 
-    // 1. Check Batch Limit
+    // Scroll & Scrape Logic (Standard)
     const limit = randomInt(DEFAULT_CONFIG.BATCH_LIMIT_MIN, DEFAULT_CONFIG.BATCH_LIMIT_MAX);
     if (smartStats.batchCount >= limit) {
         log(`🧊 Batch Limit (${limit}) Reached! Cooling...`, "warn");
-        const coolTime = randomInt(DEFAULT_CONFIG.COOLING_MIN_MS, DEFAULT_CONFIG.COOLING_MAX_MS);
-        await sleep(coolTime);
+        await sleep(randomInt(DEFAULT_CONFIG.COOLING_MIN_MS, DEFAULT_CONFIG.COOLING_MAX_MS));
         smartStats.batchCount = 0;
         log("🔥 Waking up!", "success");
     }
     if (!isSmartRunning) return;
 
-    // 2. Scroll
     window.scrollTo(0, document.body.scrollHeight);
     const userDelaySec = parseFloat(localStorage.getItem('sticky_delay')) || DEFAULT_CONFIG.SCROLL_DELAY_SEC;
-    const delayMs = (userDelaySec * 1000) + randomInt(0, DEFAULT_CONFIG.JITTER_MS);
-    log(`⏳ Waiting ${Math.round(delayMs / 100) / 10}s...`);
-    await sleep(delayMs);
+    await sleep((userDelaySec * 1000) + randomInt(0, DEFAULT_CONFIG.JITTER_MS));
 
     if (!isSmartRunning) return;
     scrapeVisiblePosts(true);
@@ -218,77 +203,150 @@ async function runSmartLoop() {
     runSmartLoop();
 }
 
-// --- SCRAPE FN ---
 function scrapeVisiblePosts(isSilent = false) {
     if (!isSilent) log('🔍 Scanning posts...');
     let hashtag = 'unknown';
     const inputEl = document.getElementById('hashtag-input');
     if (inputEl && inputEl.value.trim()) hashtag = inputEl.value.trim().replace(/^#/, '');
+
     const posts = [];
     document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]').forEach(a => {
         try {
             const href = a.getAttribute('href');
-            if (!href) return;
-            const shortcodeMatch = href.match(/\/(p|reel)\/([^/?]+)/);
-            if (!shortcodeMatch) return;
-            posts.push({
-                id: shortcodeMatch[2],
-                shortcode: shortcodeMatch[2],
-                url: href.startsWith('http') ? href : `https://www.instagram.com${href}`,
-                caption: a.querySelector('img')?.alt || '',
-                owner: 'Unknown',
-                likes: '0',
-                commentsCount: '0',
-                timestamp: new Date().toISOString(),
-                searchQuery: hashtag
-            });
+            if (href) {
+                const shortcodeMatch = href.match(/\/(p|reel)\/([^/?]+)/);
+                if (shortcodeMatch) {
+                    posts.push({
+                        id: shortcodeMatch[2],
+                        shortcode: shortcodeMatch[2],
+                        url: href.startsWith('http') ? href : `https://www.instagram.com${href}`,
+                        caption: a.querySelector('img')?.alt || '',
+                        owner: 'Unknown',
+                        likes: '0',
+                        commentsCount: '0',
+                        timestamp: new Date().toISOString(),
+                        searchQuery: hashtag
+                    });
+                }
+            }
         } catch (e) { }
     });
     if (posts.length > 0) uploadData(posts, 'UPLOAD_HASHTAGS', isSilent);
     else if (!isSilent) log('⚠️ No visible posts.');
 }
 
+// --- ROBUST COMMENT SCRAPING ---
 async function scrapeVisibleComments(isAuto = false) {
+    let targetHashtag = '';
+
     if (isAuto) {
-        log('🤖 AUTO-SCRAPING COMMENTS (Reading Hash)...', 'success');
-        await sleep(1000);
+        log('🤖 AUTO-SCRAPING COMMENTS...', 'success');
+        // Parse Hash for Tag: #scrape_comments&tag=foodie
+        const hash = window.location.hash;
+        if (hash.includes('&tag=')) {
+            targetHashtag = hash.split('&tag=')[1] || '';
+            log(`🏷️ Hashtag Detected: #${targetHashtag}`);
+        }
+        await sleep(1500);
     } else {
         log('💬 Scanning comments...');
     }
 
     const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
-    // SCROLL LOOP
-    for (let i = 0; i < 5; i++) {
-        log(`📜 Deep Scroll ${i + 1}/5...`);
+    // SCROLL LOOP (Try to trigger lazy load)
+    for (let i = 0; i < 6; i++) {
+        log(`📜 Deep Scroll ${i + 1}/6...`);
+        // Try multiple scroll targets
+        let scrolled = false;
+
+        // 1. Specific Dialog
         const dialog = document.querySelector('div[role="dialog"] div[style*="overflow"]');
-        if (dialog) dialog.scrollTo(0, dialog.scrollHeight);
-        else window.scrollBy(0, 800);
+        if (dialog) {
+            dialog.scrollTo(0, dialog.scrollHeight);
+            scrolled = true;
+        }
+
+        // 2. Generic Scrollable Containers (common in modals)
+        if (!scrolled) {
+            document.querySelectorAll('div[class*="x1n2onr6"]').forEach(div => {
+                if (div.scrollHeight > div.clientHeight) {
+                    div.scrollTop = div.scrollHeight;
+                    scrolled = true;
+                }
+            });
+        }
+
+        // 3. Fallback: Window Scroll
+        if (!scrolled) window.scrollBy(0, 800);
+
+        // 4. Look for "Load more comments" button (usually circle icon with +)
+        const loadMoreBtn = document.querySelector('svg[aria-label="Load more comments"]');
+        if (loadMoreBtn) {
+            log('🖱️ Clicking "Load more"...');
+            loadMoreBtn.parentElement.click();
+        }
+
         await sleep(1500);
     }
 
     const comments = [];
     const seen = new Set();
-    document.querySelectorAll('ul li').forEach(li => {
-        const text = li.innerText;
-        if (text.length > 5 && !seen.has(text.substring(0, 10))) {
-            seen.add(text.substring(0, 10));
-            const lines = text.split('\n');
-            comments.push({
-                id: Math.random(),
-                username: lines[0] || 'Unknown',
-                text: lines[1] || text,
-                mediaId
-            });
-        }
-    });
+
+    // BROAD SELECTOR STRATEGY
+    // Look for list items, but also just spans with text inside container
+    // Instagram comments are often structured: ul > div > div > div...
+
+    // Strategy A: UL LI (Classic)
+    document.querySelectorAll('ul li').forEach(li => processNode(li));
+
+    // Strategy B: Div with role="listitem" (Modern) (unlikely but possible)
+    document.querySelectorAll('div[role="listitem"]').forEach(div => processNode(div));
+
+    // Strategy C: Catch-all visible text blocks in the dialog area? Too risky.
+
+    function processNode(node) {
+        try {
+            const text = node.innerText;
+            // Basic filtering: Must have length, not be a button
+            if (text.length > 2 && !text.includes('Reply') && !seen.has(text.substring(0, 10))) {
+                seen.add(text.substring(0, 10));
+
+                // Username extraction heuristic: First line is often username
+                const lines = text.split('\n').filter(l => l.trim().length > 0);
+                if (lines.length >= 1) {
+                    // Skip if first line is "Verified" or "Follow"
+                    let user = lines[0];
+                    let content = lines.slice(1).join(' ');
+
+                    // Cleanup
+                    if (user.includes('Verified')) user = lines[1] || user;
+
+                    if (content.length > 0) {
+                        comments.push({
+                            id: Math.random(),
+                            username: user,
+                            text: content,
+                            mediaId: mediaId,
+                            hashtag: targetHashtag // Add the hashtag!
+                        });
+                    }
+                }
+            }
+        } catch (e) { }
+    }
 
     log(`📦 Found ${comments.length} comments.`);
     if (comments.length > 0) {
         uploadData(comments, 'UPLOAD_COMMENTS', false);
         if (isAuto) log('✅ Auto-Action Complete.', 'success');
     }
-    else log('⚠️ No comments found.');
+    else {
+        log('⚠️ No comments found. Try manually opening comments first.', 'warn');
+        // Fallback: If 0 comments, maybe it's actually empty?
+        const emptyState = document.body.innerText.includes('No comments yet');
+        if (emptyState) log('ℹ️ Post truly has no comments.');
+    }
 }
 
 // --- UPLOADER ---

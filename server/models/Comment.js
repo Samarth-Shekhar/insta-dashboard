@@ -21,6 +21,9 @@ const commentSchema = new mongoose.Schema({
   mediaId: {
     type: String,
     required: true
+  },
+  hashtag: {
+    type: String
   }
 }, { timestamps: true });
 

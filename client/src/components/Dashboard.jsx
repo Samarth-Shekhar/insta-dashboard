@@ -64,7 +64,7 @@ const Dashboard = () => {
             }
 
             const post = postsToScrape[i];
-            window.open(`${post.url}#scrape_comments`, '_blank');
+            window.open(`${post.url}#scrape_comments&tag=${post.searchQuery || ''}`, '_blank');
             i++;
 
             // Wait 12 seconds
@@ -213,7 +213,8 @@ const Dashboard = () => {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Username</th>
-                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase w-1/2">Comment</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase w-1/3">Comment</th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Hashtag</th>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Date</th>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Link</th>
                                     </tr>
@@ -223,13 +224,20 @@ const Dashboard = () => {
                                         <tr key={c.id} className="hover:bg-gray-50">
                                             <td className="p-4 font-medium text-blue-600">{c.username}</td>
                                             <td className="p-4 text-gray-700">{c.text}</td>
+                                            <td className="p-4">
+                                                {c.hashtag ? (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                                        #{c.hashtag}
+                                                    </span>
+                                                ) : <span className="text-gray-400">-</span>}
+                                            </td>
                                             <td className="p-4 text-sm text-gray-500">{new Date(c.timestamp).toLocaleString()}</td>
                                             <td className="p-4 text-xs">
                                                 <a href={c.mediaId} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">View</a>
                                             </td>
                                         </tr>
                                     ))}
-                                    {comments.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-gray-400">No comments found.</td></tr>}
+                                    {comments.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-gray-400">No comments found.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
