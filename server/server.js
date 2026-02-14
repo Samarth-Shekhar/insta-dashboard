@@ -23,6 +23,11 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// Simple Health Check Route
+app.get('/', (req, res) => {
+    res.send('Insta-Backend is Runner! 🏃‍♂️');
+});
+
 // ... (routes stay the same)
 
 // Initial server start (Conditional for Vercel)
