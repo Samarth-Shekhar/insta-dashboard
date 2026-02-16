@@ -43,11 +43,53 @@ router.post('/fetch', async (req, res) => {
     }
 });
 
-// GET /api/comments
-// Supports pagination, search, sort
-router.get('/', async (req, res) => {
+const authenticateToken = require('../middleware/authMiddleware');
+const jwt = require('jsonwebtoken');
+
+// POST /api/comments/import (For Extension)
+router.post('/import', async (req, res) => {
+    try {
+        const { comments, token } = req.body;
+        let userId = null;
+
+        // Try to identify user from header or body token
+        const authHeader = req.headers['authorization'];
+        const headerToken = authHeader && authHeader.split(' ')[1];
+        const effectiveToken = headerToken || token;
+
+        if (effectiveToken) {
+            try {
+                const decoded = jwt.verify(effectiveToken, process.env.JWT_SECRET || 'secret_key');
+                userId = decoded.userId;
+            } catch (e) {
+                console.warn('[Import] Invalid token provided', e.message);
+            }
+        }
+
+        if (!comments || !Array.isArray(comments)) {
+            return res.status(400).json({ error: 'Invalid data' });
+        }
+
+        const ops = comments.map(c => ({
+            updateOne: {
+                filter: { id: c.id },
+                update: { ...c, owner: userId },
+                upsert: true
+            }
+        }));
+
+        await Comment.bulkWrite(ops);
+        res.json({ success: true, count: comments.length });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/comments (Protected)
+router.get('/', authenticateToken, async (req, res) => {
     const { page = 1, limit = 10, search, mediaId } = req.query;
-    const query = {};
+    const query = { owner: req.user.userId }; // Filter by user
 
     if (mediaId) {
         query.mediaId = mediaId;
@@ -81,46 +123,11 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /api/comments/export
-router.get('/export', async (req, res) => {
-    const { mediaId } = req.query;
-    const query = {};
-    if (mediaId) query.mediaId = mediaId;
-
+// DELETE /api/comments (Protected)
+router.delete('/', authenticateToken, async (req, res) => {
     try {
-        const comments = await Comment.find(query).lean();
-
-        const fields = ['id', 'username', 'text', 'timestamp', 'mediaId'];
-        const opts = { fields };
-        const parser = new Parser(opts);
-        const csv = parser.parse(comments);
-
-        res.header('Content-Type', 'text/csv');
-        res.attachment('comments.csv');
-        return res.send(csv);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error exporting comments' });
-    }
-});
-
-// DELETE /api/comments
-// Clears ALL comments from the database
-router.delete('/', async (req, res) => {
-    try {
-        await Comment.deleteMany({});
-        res.status(200).json({ message: 'All comments cleared successfully' });
-    } catch (error) {
-        console.error('Error clearing comments:', error);
-        res.status(500).json({ error: 'Failed to clear comments' });
-    }
-});
-
-// POST /api/comments/clear (Backup for DELETE issues)
-router.post('/clear', async (req, res) => {
-    try {
-        await Comment.deleteMany({});
-        res.status(200).json({ message: 'All comments cleared successfully' });
+        await Comment.deleteMany({ owner: req.user.userId });
+        res.status(200).json({ message: 'User comments cleared' });
     } catch (error) {
         console.error('Error clearing comments:', error);
         res.status(500).json({ error: 'Failed to clear comments' });

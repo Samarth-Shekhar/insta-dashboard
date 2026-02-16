@@ -8,7 +8,15 @@ const api = axios.create({
         : 'https://insta-backend-azure.vercel.app/api',
 });
 
-// Removed interceptor to prevent any weird Authorization headers
-// for this public-style dashboard.
+// Request interceptor to add token
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
 
 export default api;

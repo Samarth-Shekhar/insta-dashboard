@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('comments');
     const [comments, setComments] = useState([]);
     const [hashtags, setHashtags] = useState([]);
@@ -21,11 +23,19 @@ const Dashboard = () => {
     useEffect(() => {
         if (activeTab === 'comments') {
             fetchStoredComments();
-        } else {
+        } else if (activeTab === 'hashtag_comments') {
+            fetchStoredComments(); // Hashtag comments are still comments, just filtered
+        }
+        else {
             fetchStoredHashtags();
         }
     }, [page, currentMediaId, activeTab]);
     // removed 'search' from dependency to allow client-side filtering for hashtags
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
 
     // --- BULK HELPERS ---
     const getFilteredHashtags = () => {
@@ -50,31 +60,36 @@ const Dashboard = () => {
     };
 
     const handleBatchScrape = async () => {
-        if (!window.confirm(`⚠️ WARNING: This will open ${selectedPosts.size} new tabs sequentially!\n\nYou must ALLOW POPUPS for this site.\n\nTabs will open every 12 seconds to allow the extension to scrape. Continue?`)) return;
+        if (!window.confirm(`⚠️ WARNING: This will open ${selectedPosts.size} new tabs sequentially!\n\nYou must ALLOW POPUPS for this site.\n\nTabs will open every 15 seconds to allow the extension to scrape (~50 comments each). Continue?`)) return;
 
         setIsBatchScraping(true);
         const postsToScrape = hashtags.filter(p => selectedPosts.has(p.id));
+        const token = localStorage.getItem('token'); // Get auth token
 
         let i = 0;
         const processNext = () => {
             if (i >= postsToScrape.length) {
                 setIsBatchScraping(false);
-                alert('Batch Scrape Sequence Completed!');
+                alert('Batch Scrape Sequence Completed! Refresh to see new data.');
+                fetchStoredHashtags(); // Refresh to see updated counts
                 return;
             }
 
             const post = postsToScrape[i];
-            window.open(`${post.url}#scrape_comments&tag=${post.searchQuery || ''}`, '_blank');
+            // Pass token in URL hash
+            window.open(`${post.url}#scrape_comments&tag=${post.searchQuery || ''}&token=${token}`, '_blank');
             i++;
 
-            // Wait 12 seconds
-            setTimeout(processNext, 12000);
+            // Wait 15 seconds (increased for v10 deep scrape)
+            setTimeout(processNext, 15000);
         };
 
         processNext();
     };
 
     const fetchStoredComments = async () => {
+        setLoading(true);
+        setError(null);
         try {
             const { data } = await api.get('/comments', {
                 params: { page, search, mediaId: currentMediaId }
@@ -82,7 +97,11 @@ const Dashboard = () => {
             setComments(data.comments || []);
             setTotalPages(data.totalPages || 1);
         } catch (error) {
-            console.error('Failed to fetch stored comments');
+            console.error('Failed to fetch stored comments', error);
+            setError(`Failed to load comments: ${error.message}`);
+            if (error.response?.status === 401 || error.response?.status === 403) navigate('/login');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -106,6 +125,7 @@ const Dashboard = () => {
             }
         } catch (error) {
             setError(`Failed to load data: ${error.message}`);
+            if (error.response?.status === 401 || error.response?.status === 403) navigate('/login');
             setHashtags([]);
         } finally {
             setLoading(false);
@@ -152,7 +172,7 @@ const Dashboard = () => {
 
     const exportHashtags = () => {
         if (hashtags.length === 0) return alert('No data');
-        const headers = ['URL', 'Caption', 'Likes', 'Comments', 'Hashtag', 'Date'];
+        const headers = ['URL', 'Caption', 'Likes', 'Comments', 'Hashtag', 'Date', 'Scraped Count'];
         const csvContent = [
             headers.join(','),
             ...hashtags.map(p => [
@@ -161,7 +181,8 @@ const Dashboard = () => {
                 p.likes,
                 p.commentsCount,
                 p.searchQuery,
-                new Date(p.timestamp).toISOString()
+                new Date(p.timestamp).toISOString(),
+                p.scrapedCommentsCount || 0
             ].join(','))
         ].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -173,7 +194,7 @@ const Dashboard = () => {
 
     const exportComments = () => {
         if (comments.length === 0) return alert('No comments');
-        const headers = ['Username', 'Comment', 'Date', 'Post URL', 'ID'];
+        const headers = ['Username', 'Comment', 'Date', 'Post URL', 'ID', 'Hashtag'];
         const csvContent = [
             headers.join(','),
             ...comments.map(c => [
@@ -181,7 +202,8 @@ const Dashboard = () => {
                 `"${(c.text || '').replace(/"/g, '""')}"`,
                 new Date(c.timestamp).toISOString(),
                 c.mediaId || '',
-                c.id
+                c.id,
+                c.hashtag || ''
             ].join(','))
         ].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -199,25 +221,28 @@ const Dashboard = () => {
                         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">InstaExtract Dashboard</h1>
                         <p className="text-gray-500 text-sm mt-1">Manage your scraped data efficiently</p>
                     </div>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setActiveTab('comments')}
-                            className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'comments' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            Generic Comments
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('hashtag_comments')}
-                            className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'hashtag_comments' ? 'bg-teal-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            #Hashtag Comments
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('hashtags')}
-                            className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'hashtags' ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            Hashtag Posts
-                        </button>
+                    <div className="flex gap-2 items-center">
+                        <div className="flex gap-2 mr-4">
+                            <button
+                                onClick={() => setActiveTab('comments')}
+                                className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'comments' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                                Generic Comments
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('hashtag_comments')}
+                                className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'hashtag_comments' ? 'bg-teal-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                                #Hashtag Comments
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('hashtags')}
+                                className={`px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${activeTab === 'hashtags' ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                                Hashtag Posts
+                            </button>
+                        </div>
+                        <button onClick={handleLogout} className="text-red-600 hover:text-red-800 text-sm font-medium">Logout</button>
                     </div>
                 </header>
 
@@ -332,7 +357,7 @@ const Dashboard = () => {
                                             </td>
                                         </tr>
                                     ))}
-                                    {comments.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-gray-400">No comments found.</td></tr>}
+                                    {comments.filter(c => !c.hashtag).length === 0 && <tr><td colSpan="5" className="p-8 text-center text-gray-400">No generic comments found.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -390,6 +415,7 @@ const Dashboard = () => {
                                                 className="rounded"
                                             />
                                         </th>
+                                        <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Status</th>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Post URL</th>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Hashtag</th>
                                         <th className="p-4 font-semibold text-gray-600 text-sm uppercase">Username</th>
@@ -410,6 +436,15 @@ const Dashboard = () => {
                                                     />
                                                 </td>
                                                 <td className="p-4">
+                                                    {post.isScraped ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800">
+                                                            ✅ {post.scrapedCommentsCount || 0}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400 text-xs">Pending</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4">
                                                     <a href={post.url} target="_blank" rel="noreferrer" className="text-blue-600 font-medium hover:underline text-xs bg-blue-50 px-2 py-1 rounded border border-blue-100 block w-full truncate">
                                                         {post.url}
                                                     </a>
@@ -423,7 +458,7 @@ const Dashboard = () => {
                                                 <td className="p-4 text-gray-700 text-sm">{post.caption ? post.caption.substring(0, 40) + '...' : '-'}</td>
                                                 <td className="p-4">
                                                     <button
-                                                        onClick={() => window.open(`${post.url}#scrape_comments`, '_blank')}
+                                                        onClick={() => window.open(`${post.url}#scrape_comments&token=${localStorage.getItem('token')}`, '_blank')}
                                                         className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded hover:bg-indigo-700 font-medium flex items-center gap-1 shadow-sm"
                                                     >
                                                         🤖 Auto
@@ -433,7 +468,7 @@ const Dashboard = () => {
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan="6" className="p-12 text-center text-gray-400 italic">
+                                            <td colSpan="7" className="p-12 text-center text-gray-400 italic">
                                                 No posts found. {search ? `Try clearing filter.` : `Use the extension to scrape hashtags first.`}
                                             </td>
                                         </tr>

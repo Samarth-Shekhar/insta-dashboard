@@ -24,6 +24,11 @@ const commentSchema = new mongoose.Schema({
   },
   hashtag: {
     type: String
+  },
+  owner: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false // Optional for now to avoid breaking existing data
   }
 }, { timestamps: true });
 

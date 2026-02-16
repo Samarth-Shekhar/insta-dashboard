@@ -4,13 +4,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         'https://insta-backend-azure.vercel.app/api'
     ];
 
-    async function sendToBackend(path, body) {
+    async function sendToBackend(path, body, token = null) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         for (const base of ENDPOINTS) {
             try {
                 console.log(`[Background] Trying upload to: ${base}${path}`);
                 const res = await fetch(`${base}${path}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify(body)
                 });
                 if (res.ok) {
@@ -26,21 +29,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'UPLOAD_HASHTAGS') {
-        console.log('[Background] Received upload request');
-        console.log('[Background] Number of posts:', request.data?.length);
-
-        sendToBackend('/hashtags/import', { posts: request.data })
+        sendToBackend('/hashtags/import', { posts: request.data, token: request.token }, request.token)
             .then(data => sendResponse({ success: true, count: data.count }))
             .catch(err => sendResponse({ success: false, error: err.message }));
-
         return true;
     }
 
     if (request.action === 'UPLOAD_COMMENTS') {
-        console.log('[Background] Uploading comments:', request.data?.length);
-        sendToBackend('/comments/import', { comments: request.data })
+        sendToBackend('/comments/import', { comments: request.data, token: request.token }, request.token)
             .then(data => sendResponse(data))
             .catch(err => sendResponse({ error: err.message }));
+        return true;
+    }
+
+    if (request.action === 'MARK_SCRAPED') {
+        sendToBackend('/hashtags/mark-scraped', { id: request.id, count: request.count }, request.token);
         return true;
     }
 

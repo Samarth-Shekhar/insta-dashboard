@@ -1,26 +1,57 @@
-// Insta-Extractor v9.1 - "Robust Tagging"
-// Features: Manual Scrape Hashtag Support, Timestamp Fix, Sidebar Exclusion, Better Tag Parsing
+// Insta-Extractor v10.0 - "Precision & Segregation"
+// Features: Auth Support, robust "Load More", Hierarchical Parsing
 
-console.log('🚀 Insta-Extractor v9.1 Loaded');
+console.log('🚀 Insta-Extractor v10.0 Loaded');
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 // --- STATE ---
-let isSmartRunning = false;
-let smartStats = { batchCount: 0, total: 0 };
 let hasAutoRun = false;
 
-// --- CONFIG ---
-const DEFAULT_CONFIG = {
-    SCROLL_DELAY_SEC: 8.2,
-    JITTER_MS: 2000,
-    BATCH_LIMIT_MIN: 20,
-    BATCH_LIMIT_MAX: 30,
-    COOLING_MIN_MS: 120000,
-    COOLING_MAX_MS: 300000
-};
+// --- LOGGING ---
+function log(msg, type = 'info') {
+    const el = document.getElementById('v7-log');
+    if (el) {
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        let color = '#ecf0f1';
+        if (type === 'success') color = '#2ecc71';
+        if (type === 'warn') color = '#f1c40f';
+        if (type === 'error') color = '#e74c3c';
+        el.innerHTML += `<div style="margin-bottom:2px; color:${color};"><span style="opacity:0.6">[${time}]</span> ${msg}</div>`;
+        el.scrollTop = el.scrollHeight;
+    }
+    console.log('[Bot]', msg);
+}
+
+// --- NETWORK UPLOAD ---
+function uploadData(data, action, isSilent = false) {
+    if (!data || data.length === 0) return;
+
+    // Get token from URL if present (passed by Dashboard)
+    // #scrape_comments&tag=foo&token=JWT_TOKEN
+    let token = null;
+    try {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        token = params.get('token');
+    } catch (e) { }
+
+    chrome.runtime.sendMessage({
+        action: action,
+        data: data,
+        token: token // Pass token to background
+    }, (response) => {
+        if (!isSilent) {
+            if (response && response.success) {
+                log(`✅ Uploaded ${data.length} items!`, 'success');
+            } else {
+                log(`❌ Upload Failed: ${response?.error || 'Unknown'}`, 'error');
+            }
+        }
+    });
+}
 
 // --- UI INJECTION ---
 function injectSimpleUI() {
@@ -39,173 +70,33 @@ function injectSimpleUI() {
         background: white; border: 2px solid #8e44ad; border-radius: 12px;
         padding: 15px; z-index: 9999999; box-shadow: 0 10px 30px rgba(0,0,0,0.3); font-family: sans-serif;
     `;
-
     div.innerHTML = `
         <h3 style="margin:0 0 10px; color:#8e44ad; display:flex; justify-content:space-between; align-items:center;">
-            <span>🤖 Scraper v8.9</span>
+            <span>🤖 Scraper v10.0</span>
             <span style="font-size:12px; color:#999; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">❌</span>
         </h3>
-        
-        <div style="background:#f0f0f0; padding:8px; border-radius:6px; margin-bottom:10px;">
-            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">TARGET HASHTAG</div>
-            <div style="display:flex; gap:5px;">
-                <input type="text" id="hashtag-input" placeholder="Enter hashtag..." style="
-                    flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; color: #333 !important; background: #fff !important;
-                ">
-                <button id="btn-go" style="
-                    padding: 6px 12px; background: #8e44ad; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight:bold;
-                ">GO</button>
-            </div>
+        <div id="v7-log" style="height: 120px; overflow-y: auto; background: #2c3e50; border: 1px solid #34495e; padding: 8px; font-size: 11px; color: #ecf0f1; border-radius: 4px; font-family: monospace;">Ready.</div>
+        <div style="margin-top:10px; display:flex; gap:8px;">
+            <button id="btn-scrape-posts" style="flex: 1; padding: 8px; background: #9b59b6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">⚡ POSTS</button>
+            <button id="btn-scrape-comments" style="flex: 1; padding: 8px; background: #3498db; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">💬 COMMENTS</button>
         </div>
-
-        <div style="background:#fff3cd; padding:8px; border-radius:6px; margin-bottom:10px; border:1px solid #ffeeba;">
-            <div style="font-size:11px; font-weight:bold; color:#856404; margin-bottom:4px; display:flex; justify-content:space-between;">
-                <span>🛑 AUTO-STOP TIME (Optional)</span>
-            </div>
-            <input type="time" id="stop-time-input" style="
-                width: 100%; padding: 6px; border: 1px solid #999; border-radius: 4px; font-size: 14px; text-align: center;
-                color: #000000 !important; background: #ffffff !important; font-weight: bold;
-            ">
-            <div style="font-size:11px; font-weight:bold; color:#856404; margin-top:8px; display:flex; justify-content:space-between;">
-                <span>⏳ SCROLL DELAY (Seconds)</span>
-                <span id="delay-display" style="font-weight:normal; color:#856404;">8.2s</span>
-            </div>
-            <input type="number" id="delay-input" step="0.1" min="1" value="8.2" style="
-                width: 100%; padding: 6px; border: 1px solid #999; border-radius: 4px; font-size: 14px; text-align: center;
-                color: #000000 !important; background: #ffffff !important; font-weight: bold;
-            ">
-        </div>
-
-        <div style="margin-bottom:10px; display:flex; gap:8px;">
-            <button id="btn-smart-toggle" style="
-                flex: 1.5; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;
-            ">
-                🤖 START SMART BOT
-            </button>
-        </div>
-
-        <div style="margin-bottom:10px; display:flex; gap:8px;">
-            <button id="btn-scrape-posts" style="flex: 1; padding: 8px; background: #9b59b6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">
-                ⚡ POSTS
-            </button>
-            <button id="btn-scrape-comments" style="flex: 1; padding: 8px; background: #3498db; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">
-                💬 COMMENTS
-            </button>
-        </div>
-
-        <div id="v7-log" style="
-            height: 120px; overflow-y: auto; background: #2c3e50; border: 1px solid #34495e; padding: 8px; font-size: 11px; color: #ecf0f1; border-radius: 4px; font-family: monospace;
-        ">Ready.</div>
     `;
-
     document.body.appendChild(div);
-
-    // --- RESTORE UI ---
-    const inputEl = document.getElementById('hashtag-input');
-    const delayEl = document.getElementById('delay-input');
-    const stopTimeEl = document.getElementById('stop-time-input');
-
-    if (inputEl) inputEl.value = localStorage.getItem('sticky_hashtag') || '';
-    if (delayEl) {
-        delayEl.value = localStorage.getItem('sticky_delay') || '8.2';
-        document.getElementById('delay-display').innerText = delayEl.value + 's';
-    }
-    if (stopTimeEl) stopTimeEl.value = localStorage.getItem('sticky_stop_time') || '';
-
-    // Listeners and Bindings
-    inputEl.addEventListener('input', (e) => localStorage.setItem('sticky_hashtag', e.target.value.trim()));
-    stopTimeEl.addEventListener('input', (e) => localStorage.setItem('sticky_stop_time', e.target.value));
-    delayEl.addEventListener('input', (e) => {
-        let val = parseFloat(e.target.value);
-        if (val < 1) val = 1;
-        document.getElementById('delay-display').innerText = val + 's';
-        localStorage.setItem('sticky_delay', val);
-    });
-
-    document.getElementById('btn-go').addEventListener('click', () => {
-        const val = inputEl.value.trim().replace(/^#/, '');
-        if (val) window.location.href = `https://www.instagram.com/explore/tags/${val}/`;
-    });
 
     document.getElementById('btn-scrape-posts').addEventListener('click', () => scrapeVisiblePosts(false));
     document.getElementById('btn-scrape-comments').addEventListener('click', () => scrapeVisibleComments(false));
-    document.getElementById('btn-smart-toggle').addEventListener('click', toggleSmartBot);
 }
 
 setInterval(injectSimpleUI, 1000);
 
-// --- LOGGING ---
-function log(msg, type = 'info') {
-    const el = document.getElementById('v7-log');
-    if (el) {
-        const time = new Date().toLocaleTimeString().split(' ')[0];
-        let color = '#ecf0f1';
-        if (type === 'success') color = '#2ecc71';
-        if (type === 'warn') color = '#f1c40f';
-        if (type === 'error') color = '#e74c3c';
-        el.innerHTML += `<div style="margin-bottom:2px; color:${color};"><span style="opacity:0.6">[${time}]</span> ${msg}</div>`;
-        el.scrollTop = el.scrollHeight;
-    }
-    console.log('[Bot]', msg);
-}
-
-// --- SMART BOT LOGIC ---
-async function toggleSmartBot() {
-    isSmartRunning = !isSmartRunning;
-    const btn = document.getElementById('btn-smart-toggle');
-    if (isSmartRunning) {
-        btn.innerText = "🛑 STOP SMART BOT";
-        btn.style.background = "#c0392b";
-        log("🤖 Smart Bot STARTED", "success");
-        runSmartLoop();
-    } else {
-        btn.innerText = "🤖 START SMART BOT";
-        btn.style.background = "#27ae60";
-        log("🛑 Smart Bot STOPPED", "warn");
-    }
-}
-
-async function runSmartLoop() {
-    if (!isSmartRunning) return;
-
-    // CHECK STOP TIME
-    const stopTimeInput = document.getElementById('stop-time-input');
-    if (stopTimeInput && stopTimeInput.value) {
-        const [h, m] = stopTimeInput.value.split(':');
-        const now = new Date();
-        const target = new Date();
-        target.setHours(h, m, 0, 0);
-        if (now >= target) {
-            log(`🛑 STOP TIME REACHED! Stopping.`, 'error');
-            toggleSmartBot();
-            return;
-        }
-    }
-
-    const limit = randomInt(DEFAULT_CONFIG.BATCH_LIMIT_MIN, DEFAULT_CONFIG.BATCH_LIMIT_MAX);
-    if (smartStats.batchCount >= limit) {
-        log(`🧊 Batch Limit (${limit}) Reached! Cooling...`, "warn");
-        await sleep(randomInt(DEFAULT_CONFIG.COOLING_MIN_MS, DEFAULT_CONFIG.COOLING_MAX_MS));
-        smartStats.batchCount = 0;
-        log("🔥 Waking up!", "success");
-    }
-    if (!isSmartRunning) return;
-
-    window.scrollTo(0, document.body.scrollHeight);
-    const userDelaySec = parseFloat(localStorage.getItem('sticky_delay')) || DEFAULT_CONFIG.SCROLL_DELAY_SEC;
-    await sleep((userDelaySec * 1000) + randomInt(0, DEFAULT_CONFIG.JITTER_MS));
-
-    if (!isSmartRunning) return;
-    scrapeVisiblePosts(true);
-    smartStats.batchCount++;
-    runSmartLoop();
-}
-
+// --- POST SCRAPING ---
 function scrapeVisiblePosts(isSilent = false) {
     if (!isSilent) log('🔍 Scanning posts...');
+
+    // Try to get hashtag from URL or Input
     let hashtag = 'unknown';
-    const inputEl = document.getElementById('hashtag-input');
-    if (inputEl && inputEl.value.trim()) hashtag = inputEl.value.trim().replace(/^#/, '');
+    const match = window.location.href.match(/\/tags\/([^/]+)/);
+    if (match) hashtag = match[1];
 
     const posts = [];
     document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]').forEach(a => {
@@ -229,191 +120,142 @@ function scrapeVisiblePosts(isSilent = false) {
             }
         } catch (e) { }
     });
+
     if (posts.length > 0) uploadData(posts, 'UPLOAD_HASHTAGS', isSilent);
     else if (!isSilent) log('⚠️ No visible posts.');
 }
 
-// --- NUCLEAR COMMENT SCRAPING ---
+// --- COMMENT SCRAPING (Fixed Logic) ---
 async function scrapeVisibleComments(isAuto = false) {
     let targetHashtag = '';
+
+    // Parse Hash Params
+    let params;
+    try {
+        const hash = window.location.hash.substring(1);
+        params = new URLSearchParams(hash);
+    } catch (e) {
+        log('⚠️ Hash Parse Error', 'warn');
+        params = new URLSearchParams();
+    }
+
+    // Fix for "scrape_comments&tag=..." format which isn't standard querystring
+    // Fallback manual parsing if get() fails
+    if (!params.get('tag')) {
+        const parts = window.location.hash.split('&tag=');
+        if (parts.length > 1) targetHashtag = decodeURIComponent(parts[1].split('&')[0]);
+    } else {
+        targetHashtag = params.get('tag');
+    }
+
+    if (targetHashtag) log(`🏷️ Hashtag Context: #${targetHashtag}`);
+
+    // 1. Expand Comments (Load More)
+    if (isAuto) {
+        log('🔄 Expanding comments (max 5 loops)...');
+        for (let i = 0; i < 5; i++) {
+            // Look for "+" circle SVG or "View more comments" text
+            const loadMoreButtons = Array.from(document.querySelectorAll('svg[aria-label="Load more comments"], svg[aria-label="Load more"]'));
+
+            // Also look for button text
+            document.querySelectorAll('span, div').forEach(el => {
+                if (el.innerText === 'View more comments') loadMoreButtons.push(el);
+            });
+
+            if (loadMoreButtons.length > 0) {
+                const btn = loadMoreButtons[0].closest('div[role="button"]') || loadMoreButtons[0].parentElement;
+                if (btn) {
+                    btn.click();
+                    log(`Clicking Load More (${i + 1}/5)...`);
+                    await sleep(3000);
+                }
+            } else {
+                log('No more "Load More" buttons found.');
+                break;
+            }
+        }
+    }
+
+    // 2. Parse Hierarchically
+    log('💬 Parsing visible comments...');
+    const comments = [];
     const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
-    // PRIORITIZE INPUT FIELD for Hashtag Context
-    const inputEl = document.getElementById('hashtag-input');
-    if (inputEl && inputEl.value.trim()) {
-        targetHashtag = inputEl.value.trim().replace(/^#/, '');
-    }
+    // Find all List Items that look like comments
+    // Strategy: Find ULs inside the Dialog (if modal) or Article
+    const container = document.querySelector('div[role="dialog"]') || document.querySelector('article') || document;
+    if (!container) return log('❌ No container found', 'error');
 
-    if (isAuto) {
-        log('🤖 AUTO-SCRAPING COMMENTS...', 'success');
+    // Instagram comments are typically in UL > LI structure or DIV structure
+    // We try to find the UL that has multiple LIs
+    const uls = container.querySelectorAll('ul');
+    let commentList = null;
+    uls.forEach(ul => {
+        if (ul.querySelectorAll('li').length > 1) commentList = ul;
+    });
 
-        // Robust Hash Parsing
+    const items = commentList ? commentList.querySelectorAll('li') : container.querySelectorAll('div[role="button"]'); // Fallback
+
+    items.forEach(li => {
         try {
-            // Remove the leading '#' from location.hash
-            const hashString = window.location.hash.substring(1);
-            // Handle the specific format used: scrape_comments&tag=xyz
-            const params = new URLSearchParams(hashString);
+            // Must contain a username (anchor) and text
+            // Look for the user link. It's usually a bold anchor.
+            const userLink = li.querySelector('h3 a') || li.querySelector('span > a');
 
-            const tagFromUrl = params.get('tag');
-            if (tagFromUrl) {
-                targetHashtag = decodeURIComponent(tagFromUrl);
-                log(`🏷️ Hashtag Detected (URL): #${targetHashtag}`);
-            } else {
-                // Fallback for simple string splitting if URLSearchParams fails
-                const parts = hashString.split('&tag=');
-                if (parts.length > 1) {
-                    targetHashtag = decodeURIComponent(parts[1]);
-                    log(`🏷️ Hashtag Detected (Fallback): #${targetHashtag}`);
+            if (userLink) {
+                const username = userLink.innerText;
+
+                // Text extraction: Get all text in the line, remove username
+                // This is tricky. Let's look for the span that contains the text.
+                // It's often: div > span > (user) space (text)
+                const textContainer = li.querySelector(`span[dir="auto"]`);
+                let text = textContainer ? textContainer.innerText : '';
+
+                // If text is same as username, it's wrong parsing
+                if (text === username) {
+                    // Try getting next sibling of the user link container?
+                    const parent = userLink.closest('div');
+                    if (parent && parent.nextElementSibling) {
+                        text = parent.nextElementSibling.innerText;
+                    }
+                }
+
+                if (username && text && text.length > 1 && text !== username) {
+                    comments.push({
+                        id: username + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        username: username,
+                        text: text.trim(),
+                        timestamp: new Date().toISOString(),
+                        mediaId: `https://www.instagram.com/p/${mediaId}/`,
+                        hashtag: targetHashtag || null
+                    });
                 }
             }
-        } catch (e) {
-            log('⚠️ Error parsing URL hash for tag: ' + e.message, 'warn');
-        }
+        } catch (e) { }
+    });
 
-        await sleep(1500);
-    } else {
-        log('💬 Scanning comments...');
-        if (targetHashtag) log(`🏷️ Using Hashtag: #${targetHashtag}`);
-    }
+    if (comments.length > 0) {
+        log(`✅ Found ${comments.length} comments!`);
+        uploadData(comments, 'UPLOAD_COMMENTS');
 
-    // SCROLL LOOP
-    for (let i = 0; i < 6; i++) {
-        log(`📜 Deep Scroll ${i + 1}/6...`);
-        let scrolled = false;
-
-        // Find MAIN scroll container
-        const dialog = document.querySelector('div[role="dialog"] div[style*="overflow"]');
-        if (dialog) {
-            dialog.scrollTo(0, dialog.scrollHeight);
-            scrolled = true;
-        }
-
-        // Try generic classes for scrollable areas
-        if (!scrolled) {
-            document.querySelectorAll('div[class*="x1n2onr6"], div[class*="xyamay9"]').forEach(div => {
-                // Ensure it's not the main page scroll if we are in a modal
-                if (div.scrollHeight > div.clientHeight && div.clientHeight > 100) {
-                    div.scrollTop = div.scrollHeight;
-                    scrolled = true;
-                }
+        // Mark as scraped if we have ID
+        // Note: we need to send the SHORTCODE (mediaId) not the full URL
+        if (isAuto && mediaId) {
+            const shortcode = mediaId;
+            chrome.runtime.sendMessage({
+                action: 'MARK_SCRAPED',
+                id: shortcode, // This matches HashtagPost.id
+                count: comments.length,
+                token: params.get('token')
             });
         }
-
-        // Fallback: only if NO dialog is present
-        if (!scrolled && !document.querySelector('div[role="dialog"]')) window.scrollBy(0, 800);
-
-        // Click "Load more"
-        const loadMoreBtn = document.querySelector('svg[aria-label="Load more comments"]');
-        if (loadMoreBtn) loadMoreBtn.parentElement.click();
-
-        await sleep(1500);
+    } else {
+        log('⚠️ No comments found (or Parsing failed).', 'warn');
     }
 
-    const comments = [];
-    const seen = new Set();
-    const UI_BLACKLIST_EXTRA = new Set(['Home', 'Search', 'Explore', 'Reels', 'Messages', 'Notifications', 'Create', 'Profile', 'More', 'Meta', 'About', 'Blog', 'Jobs', 'Help', 'API', 'Privacy', 'Terms', 'Locations', 'Instagram Lite', 'Threads', 'Contact Uploading', 'Meta Verified', 'Follow', 'Followers', 'Following', 'Log in', 'Sign up', 'Report', 'Also from Meta']);
-
-    // NUCLEAR EXTRACTION STRATEGY
-    // 1. Target the Dialog IF it exists (Overlay modal)
-    let container = document.querySelector('div[role="dialog"]');
-
-    // 2. If no dialog, prioritize the <article> tag which usually wraps the post content
-    if (!container) {
-        container = document.querySelector('article');
+    // Close tab if auto
+    if (isAuto) {
+        await sleep(5000);
+        window.close();
     }
-
-    // 3. Fallback to main content area, but try to avoid the sidebar
-    if (!container) {
-        // Look for the area with the comment input field
-        const inputArea = document.querySelector('textarea');
-        if (inputArea) {
-            // Traverse up to find the common container for comments
-            let p = inputArea.parentElement;
-            while (p && p.childElementCount < 5) p = p.parentElement; // Heuristic
-            if (p) container = p.parentElement; // Go one higher
-        }
-    }
-
-    // Capture candidates (Text nodes with dir="auto" are best for user content)
-    // If container is null, we stick to <main> to avoid sidebar scraping
-    const searchContext = container || document.querySelector('main') || null;
-
-    if (!searchContext) {
-        log('⚠️ Could not locate comment section. Aborting to avoid garbage data.', 'error');
-        return;
-    }
-
-    const candidates = searchContext.querySelectorAll('span[dir="auto"], div[dir="auto"], span.x1lliihq');
-
-    if (candidates.length > 0) {
-        log(`🔎 Found ${candidates.length} text blocks. Parsng...`);
-        candidates.forEach(node => {
-            const text = node.innerText.trim();
-            if (text.length < 2) return;
-
-            // Strict UI Filter
-            if (UI_BLACKLIST_EXTRA.has(text)) return;
-            if (text.match(/^(Reply|See translation|View more|Like|Time|hours|days|w|h|m|s|Edited|Pinned)$/i)) return;
-            // Additional check for "Also from Meta" or similar phrases
-            if (text.includes('Also from Meta')) return;
-
-            // Heuristic: Is this inside a nav?
-            if (node.closest('nav') || node.closest('header')) return;
-
-            // Username Mapping
-            let username = 'User';
-            let parent = node.parentElement;
-            let foundUser = false;
-
-            // Look for nearby bold text or links
-            while (parent && parent !== searchContext && !foundUser) {
-                const link = parent.querySelector('a, span[style*="font-weight: 600"]');
-                if (link && link.innerText !== text && !UI_BLACKLIST_EXTRA.has(link.innerText)) {
-                    username = link.innerText;
-                    foundUser = true;
-                }
-                parent = parent.parentElement;
-            }
-
-            if (!seen.has(text.substring(0, 20))) {
-                seen.add(text.substring(0, 20));
-                comments.push({
-                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                    username: username.substring(0, 30),
-                    text: text,
-                    mediaId: mediaId,
-                    hashtag: targetHashtag,
-                    timestamp: new Date().toISOString()
-                });
-            }
-        });
-    }
-
-    log(`📦 Found ${comments.length} potential comments.`);
-    if (comments.length > 0) {
-        uploadData(comments, 'UPLOAD_COMMENTS', false);
-        if (isAuto) log('✅ Auto-Action Complete.', 'success');
-    }
-    else {
-        log('⚠️ No unique comments found. Check filters.', 'warn');
-    }
-}
-
-// --- UPLOADER ---
-function uploadData(data, actionType, silent = false) {
-    if (!silent) log(`📤 Uploading ${data.length} items...`);
-    try {
-        if (!chrome || !chrome.runtime) { log('❌ Extension Context Invalid'); return; }
-        chrome.runtime.sendMessage({ action: actionType, data: data }, (response) => {
-            if (chrome.runtime.lastError) return;
-            if (response && (response.success || response.count)) {
-                if (!silent) {
-                    log(`✅ SUCCESS! Saved ${response.count || data.length}.`, 'success');
-                    if (actionType === 'UPLOAD_HASHTAGS') alert(`✅ Saved ${response.count} items!`);
-                } else {
-                    log(`✅ Auto-Saved ${response.count || data.length}.`, 'success');
-                }
-            }
-        });
-    } catch (e) { }
 }
