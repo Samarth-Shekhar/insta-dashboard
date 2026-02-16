@@ -315,7 +315,7 @@ const Dashboard = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {comments.map(c => (
+                                    {comments.filter(c => !c.hashtag).map(c => (
                                         <tr key={c.id} className="hover:bg-gray-50">
                                             <td className="p-4 font-medium text-blue-600">{c.username}</td>
                                             <td className="p-4 text-gray-700">{c.text}</td>
