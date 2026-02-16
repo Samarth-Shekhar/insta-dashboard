@@ -131,11 +131,20 @@ const Dashboard = () => {
         if (!window.confirm('⚠️ WARNING: Clear ALL scraped comments logic?\nThis cannot be undone.')) return;
         setLoading(true);
         try {
+            // Try DELETE first
             await api.delete('/comments');
             setComments([]);
             alert('All comments cleared!');
         } catch (error) {
-            alert('Failed to clear comments: ' + error.message);
+            console.warn('DELETE failed, trying POST /clear fallback...', error);
+            try {
+                // Fallback to POST /clear
+                await api.post('/comments/clear');
+                setComments([]);
+                alert('All comments cleared (via fallback)!');
+            } catch (fallbackError) {
+                alert('Failed to clear comments: ' + fallbackError.message);
+            }
         } finally {
             setLoading(false);
         }
