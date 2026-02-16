@@ -96,13 +96,17 @@ app.post('/api/comments/import', async (req, res) => {
 });
 
 // App Routes
-app.use('/api/comments', commentRoutes);
-
 const hashtagRoutes = require('./routes/hashtags');
 app.use('/api/hashtags', hashtagRoutes);
+app.use('/hashtags', hashtagRoutes); // Fallback for Vercel rewriting behavior
 
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes); // Fallback
+
+const commentRoutes = require('./routes/comments');
+app.use('/api/comments', commentRoutes);
+app.use('/comments', commentRoutes); // Fallback
 
 app.get('/', (req, res) => {
     res.send('Instagram Comment Dashboard API Running');

@@ -1,14 +1,26 @@
-// Insta-Extractor v10.0 - "Precision & Segregation"
-// Features: Auth Support, robust "Load More", Hierarchical Parsing
+// Insta-Extractor v10.1 - "The Best of Both Worlds"
+// Features: Full UI (v9), Auth Support (v10), Deep Scraping (v10), Smart Bot
 
-console.log('🚀 Insta-Extractor v10.0 Loaded');
+console.log('🚀 Insta-Extractor v10.1 Loaded');
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 // --- STATE ---
+let isSmartRunning = false;
+let smartStats = { batchCount: 0, total: 0 };
 let hasAutoRun = false;
+
+// --- CONFIG ---
+const DEFAULT_CONFIG = {
+    SCROLL_DELAY_SEC: 8.2,
+    JITTER_MS: 2000,
+    BATCH_LIMIT_MIN: 20,
+    BATCH_LIMIT_MAX: 30,
+    COOLING_MIN_MS: 120000,
+    COOLING_MAX_MS: 300000
+};
 
 // --- LOGGING ---
 function log(msg, type = 'info') {
@@ -44,7 +56,7 @@ function uploadData(data, action, isSilent = false) {
         token: token // Pass token to background
     }, (response) => {
         if (!isSilent) {
-            if (response && response.success) {
+            if (response && (response.success || response.count)) {
                 log(`✅ Uploaded ${data.length} items!`, 'success');
             } else {
                 log(`❌ Upload Failed: ${response?.error || 'Unknown'}`, 'error');
@@ -55,9 +67,11 @@ function uploadData(data, action, isSilent = false) {
 
 // --- UI INJECTION ---
 function injectSimpleUI() {
+    // 1. Check for Auto-Run Trigger from Dashboard URL
     if (!hasAutoRun && window.location.hash.includes('#scrape_comments')) {
         hasAutoRun = true;
         console.log('🤖 Auto-Scrape Triggered by URL!');
+        // We delay slightly to let React hydration/page load finish
         setTimeout(() => scrapeVisibleComments(true), 2500);
     }
 
@@ -70,24 +84,152 @@ function injectSimpleUI() {
         background: white; border: 2px solid #8e44ad; border-radius: 12px;
         padding: 15px; z-index: 9999999; box-shadow: 0 10px 30px rgba(0,0,0,0.3); font-family: sans-serif;
     `;
+
     div.innerHTML = `
         <h3 style="margin:0 0 10px; color:#8e44ad; display:flex; justify-content:space-between; align-items:center;">
-            <span>🤖 Scraper v10.0</span>
+            <span>🤖 Scraper v10.1</span>
             <span style="font-size:12px; color:#999; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">❌</span>
         </h3>
-        <div id="v7-log" style="height: 120px; overflow-y: auto; background: #2c3e50; border: 1px solid #34495e; padding: 8px; font-size: 11px; color: #ecf0f1; border-radius: 4px; font-family: monospace;">Ready.</div>
-        <div style="margin-top:10px; display:flex; gap:8px;">
-            <button id="btn-scrape-posts" style="flex: 1; padding: 8px; background: #9b59b6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">⚡ POSTS</button>
-            <button id="btn-scrape-comments" style="flex: 1; padding: 8px; background: #3498db; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">💬 COMMENTS</button>
+        
+        <div style="background:#f0f0f0; padding:8px; border-radius:6px; margin-bottom:10px;">
+            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">TARGET HASHTAG</div>
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="hashtag-input" placeholder="Enter hashtag..." style="
+                    flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; color: #333 !important; background: #fff !important;
+                ">
+                <button id="btn-go" style="
+                    padding: 6px 12px; background: #8e44ad; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight:bold;
+                ">GO</button>
+            </div>
         </div>
+
+        <div style="background:#fff3cd; padding:8px; border-radius:6px; margin-bottom:10px; border:1px solid #ffeeba;">
+            <div style="font-size:11px; font-weight:bold; color:#856404; margin-bottom:4px; display:flex; justify-content:space-between;">
+                <span>🛑 AUTO-STOP TIME (Optional)</span>
+            </div>
+            <input type="time" id="stop-time-input" style="
+                width: 100%; padding: 6px; border: 1px solid #999; border-radius: 4px; font-size: 14px; text-align: center;
+                color: #000000 !important; background: #ffffff !important; font-weight: bold;
+            ">
+            <div style="font-size:11px; font-weight:bold; color:#856404; margin-top:8px; display:flex; justify-content:space-between;">
+                <span>⏳ SCROLL DELAY (Seconds)</span>
+                <span id="delay-display" style="font-weight:normal; color:#856404;">8.2s</span>
+            </div>
+            <input type="number" id="delay-input" step="0.1" min="1" value="8.2" style="
+                width: 100%; padding: 6px; border: 1px solid #999; border-radius: 4px; font-size: 14px; text-align: center;
+                color: #000000 !important; background: #ffffff !important; font-weight: bold;
+            ">
+        </div>
+
+        <div style="margin-bottom:10px; display:flex; gap:8px;">
+            <button id="btn-smart-toggle" style="
+                flex: 1.5; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;
+            ">
+                🤖 START SMART BOT
+            </button>
+        </div>
+
+        <div style="margin-bottom:10px; display:flex; gap:8px;">
+            <button id="btn-scrape-posts" style="flex: 1; padding: 8px; background: #9b59b6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">
+                ⚡ POSTS
+            </button>
+            <button id="btn-scrape-comments" style="flex: 1; padding: 8px; background: #3498db; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">
+                💬 COMMENTS
+            </button>
+        </div>
+
+        <div id="v7-log" style="
+            height: 120px; overflow-y: auto; background: #2c3e50; border: 1px solid #34495e; padding: 8px; font-size: 11px; color: #ecf0f1; border-radius: 4px; font-family: monospace;
+        ">Ready.</div>
     `;
+
     document.body.appendChild(div);
+
+    // --- RESTORE UI STATE ---
+    const inputEl = document.getElementById('hashtag-input');
+    const delayEl = document.getElementById('delay-input');
+    const stopTimeEl = document.getElementById('stop-time-input');
+
+    if (inputEl) inputEl.value = localStorage.getItem('sticky_hashtag') || '';
+    if (delayEl) {
+        delayEl.value = localStorage.getItem('sticky_delay') || '8.2';
+        document.getElementById('delay-display').innerText = delayEl.value + 's';
+    }
+    if (stopTimeEl) stopTimeEl.value = localStorage.getItem('sticky_stop_time') || '';
+
+    // Listeners and Bindings
+    inputEl.addEventListener('input', (e) => localStorage.setItem('sticky_hashtag', e.target.value.trim()));
+    stopTimeEl.addEventListener('input', (e) => localStorage.setItem('sticky_stop_time', e.target.value));
+    delayEl.addEventListener('input', (e) => {
+        let val = parseFloat(e.target.value);
+        if (val < 1) val = 1;
+        document.getElementById('delay-display').innerText = val + 's';
+        localStorage.setItem('sticky_delay', val);
+    });
+
+    document.getElementById('btn-go').addEventListener('click', () => {
+        const val = inputEl.value.trim().replace(/^#/, '');
+        if (val) window.location.href = `https://www.instagram.com/explore/tags/${val}/`;
+    });
 
     document.getElementById('btn-scrape-posts').addEventListener('click', () => scrapeVisiblePosts(false));
     document.getElementById('btn-scrape-comments').addEventListener('click', () => scrapeVisibleComments(false));
+    document.getElementById('btn-smart-toggle').addEventListener('click', toggleSmartBot);
 }
 
 setInterval(injectSimpleUI, 1000);
+
+// --- SMART BOT LOGIC ---
+async function toggleSmartBot() {
+    isSmartRunning = !isSmartRunning;
+    const btn = document.getElementById('btn-smart-toggle');
+    if (isSmartRunning) {
+        btn.innerText = "🛑 STOP SMART BOT";
+        btn.style.background = "#c0392b";
+        log("🤖 Smart Bot STARTED", "success");
+        runSmartLoop();
+    } else {
+        btn.innerText = "🤖 START SMART BOT";
+        btn.style.background = "#27ae60";
+        log("🛑 Smart Bot STOPPED", "warn");
+    }
+}
+
+async function runSmartLoop() {
+    if (!isSmartRunning) return;
+
+    // CHECK STOP TIME
+    const stopTimeInput = document.getElementById('stop-time-input');
+    if (stopTimeInput && stopTimeInput.value) {
+        const [h, m] = stopTimeInput.value.split(':');
+        const now = new Date();
+        const target = new Date();
+        target.setHours(h, m, 0, 0);
+        if (now >= target) {
+            log(`🛑 STOP TIME REACHED! Stopping.`, 'error');
+            toggleSmartBot();
+            return;
+        }
+    }
+
+    const limit = randomInt(DEFAULT_CONFIG.BATCH_LIMIT_MIN, DEFAULT_CONFIG.BATCH_LIMIT_MAX);
+    if (smartStats.batchCount >= limit) {
+        log(`🧊 Batch Limit (${limit}) Reached! Cooling...`, "warn");
+        await sleep(randomInt(DEFAULT_CONFIG.COOLING_MIN_MS, DEFAULT_CONFIG.COOLING_MAX_MS));
+        smartStats.batchCount = 0;
+        log("🔥 Waking up!", "success");
+    }
+    if (!isSmartRunning) return;
+
+    window.scrollTo(0, document.body.scrollHeight);
+    const userDelaySec = parseFloat(localStorage.getItem('sticky_delay')) || DEFAULT_CONFIG.SCROLL_DELAY_SEC;
+    await sleep((userDelaySec * 1000) + randomInt(0, DEFAULT_CONFIG.JITTER_MS));
+
+    if (!isSmartRunning) return;
+    scrapeVisiblePosts(true); // Scrapes posts and uploads automatically
+    smartStats.batchCount++;
+    runSmartLoop();
+}
 
 // --- POST SCRAPING ---
 function scrapeVisiblePosts(isSilent = false) {
@@ -95,8 +237,16 @@ function scrapeVisiblePosts(isSilent = false) {
 
     // Try to get hashtag from URL or Input
     let hashtag = 'unknown';
-    const match = window.location.href.match(/\/tags\/([^/]+)/);
-    if (match) hashtag = match[1];
+    // 1. Priority: Input Field
+    const inputEl = document.getElementById('hashtag-input');
+    if (inputEl && inputEl.value.trim()) {
+        hashtag = inputEl.value.trim().replace(/^#/, '');
+    }
+    // 2. Fallback: URL
+    else {
+        const match = window.location.href.match(/\/tags\/([^/]+)/);
+        if (match) hashtag = match[1];
+    }
 
     const posts = [];
     document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]').forEach(a => {
@@ -125,11 +275,11 @@ function scrapeVisiblePosts(isSilent = false) {
     else if (!isSilent) log('⚠️ No visible posts.');
 }
 
-// --- COMMENT SCRAPING (Fixed Logic) ---
+// --- COMMENT SCRAPING (Fixed Logic v10) ---
 async function scrapeVisibleComments(isAuto = false) {
     let targetHashtag = '';
 
-    // Parse Hash Params
+    // 1. Parse Hash Params (Primary for Auto)
     let params;
     try {
         const hash = window.location.hash.substring(1);
@@ -139,8 +289,7 @@ async function scrapeVisibleComments(isAuto = false) {
         params = new URLSearchParams();
     }
 
-    // Fix for "scrape_comments&tag=..." format which isn't standard querystring
-    // Fallback manual parsing if get() fails
+    // Fix for "scrape_comments&tag=..." format
     if (!params.get('tag')) {
         const parts = window.location.hash.split('&tag=');
         if (parts.length > 1) targetHashtag = decodeURIComponent(parts[1].split('&')[0]);
@@ -148,16 +297,19 @@ async function scrapeVisibleComments(isAuto = false) {
         targetHashtag = params.get('tag');
     }
 
+    // 2. Fallback: Input Field (Manual Mode)
+    const inputEl = document.getElementById('hashtag-input');
+    if (!targetHashtag && inputEl && inputEl.value.trim()) {
+        targetHashtag = inputEl.value.trim().replace(/^#/, '');
+    }
+
     if (targetHashtag) log(`🏷️ Hashtag Context: #${targetHashtag}`);
 
-    // 1. Expand Comments (Load More)
+    // v10 Deep Scrape Logic
     if (isAuto) {
         log('🔄 Expanding comments (max 5 loops)...');
         for (let i = 0; i < 5; i++) {
-            // Look for "+" circle SVG or "View more comments" text
             const loadMoreButtons = Array.from(document.querySelectorAll('svg[aria-label="Load more comments"], svg[aria-label="Load more"]'));
-
-            // Also look for button text
             document.querySelectorAll('span, div').forEach(el => {
                 if (el.innerText === 'View more comments') loadMoreButtons.push(el);
             });
@@ -176,44 +328,32 @@ async function scrapeVisibleComments(isAuto = false) {
         }
     }
 
-    // 2. Parse Hierarchically
+    // Parse Hierarchically
     log('💬 Parsing visible comments...');
     const comments = [];
     const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
-    // Find all List Items that look like comments
-    // Strategy: Find ULs inside the Dialog (if modal) or Article
     const container = document.querySelector('div[role="dialog"]') || document.querySelector('article') || document;
     if (!container) return log('❌ No container found', 'error');
 
-    // Instagram comments are typically in UL > LI structure or DIV structure
-    // We try to find the UL that has multiple LIs
     const uls = container.querySelectorAll('ul');
     let commentList = null;
     uls.forEach(ul => {
         if (ul.querySelectorAll('li').length > 1) commentList = ul;
     });
 
-    const items = commentList ? commentList.querySelectorAll('li') : container.querySelectorAll('div[role="button"]'); // Fallback
+    const items = commentList ? commentList.querySelectorAll('li') : container.querySelectorAll('div[role="button"]');
 
     items.forEach(li => {
         try {
-            // Must contain a username (anchor) and text
-            // Look for the user link. It's usually a bold anchor.
             const userLink = li.querySelector('h3 a') || li.querySelector('span > a');
 
             if (userLink) {
                 const username = userLink.innerText;
-
-                // Text extraction: Get all text in the line, remove username
-                // This is tricky. Let's look for the span that contains the text.
-                // It's often: div > span > (user) space (text)
                 const textContainer = li.querySelector(`span[dir="auto"]`);
                 let text = textContainer ? textContainer.innerText : '';
 
-                // If text is same as username, it's wrong parsing
                 if (text === username) {
-                    // Try getting next sibling of the user link container?
                     const parent = userLink.closest('div');
                     if (parent && parent.nextElementSibling) {
                         text = parent.nextElementSibling.innerText;
@@ -238,13 +378,11 @@ async function scrapeVisibleComments(isAuto = false) {
         log(`✅ Found ${comments.length} comments!`);
         uploadData(comments, 'UPLOAD_COMMENTS');
 
-        // Mark as scraped if we have ID
-        // Note: we need to send the SHORTCODE (mediaId) not the full URL
         if (isAuto && mediaId) {
             const shortcode = mediaId;
             chrome.runtime.sendMessage({
                 action: 'MARK_SCRAPED',
-                id: shortcode, // This matches HashtagPost.id
+                id: shortcode,
                 count: comments.length,
                 token: params.get('token')
             });
@@ -253,7 +391,6 @@ async function scrapeVisibleComments(isAuto = false) {
         log('⚠️ No comments found (or Parsing failed).', 'warn');
     }
 
-    // Close tab if auto
     if (isAuto) {
         await sleep(5000);
         window.close();
