@@ -8,7 +8,32 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware - MUST be before routes to parse JSON body
-// Enable CORS for all routes
+// Manual CORS headers (for Vercel serverless compatibility)
+app.use((req, res, next) => {
+    const allowedOrigins = [
+        'https://insta-client-seven.vercel.app',
+        'http://localhost:5173',
+        'http://localhost:5001'
+    ];
+
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    next();
+});
+
+// Enable CORS for all routes (backup)
 app.use(cors({
     origin: function (origin, callback) {
         const allowedOrigins = [
