@@ -17,7 +17,7 @@
                 },
                 {
                     "key": "Access-Control-Allow-Origin",
-                    "value": "*"
+                    "value": "https://insta-client-seven.vercel.app"
                 },
                 {
                     "key": "Access-Control-Allow-Methods",
