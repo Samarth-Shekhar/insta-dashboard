@@ -101,6 +101,9 @@ app.use('/api/comments', commentRoutes);
 const hashtagRoutes = require('./routes/hashtags');
 app.use('/api/hashtags', hashtagRoutes);
 
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
 app.get('/', (req, res) => {
     res.send('Instagram Comment Dashboard API Running');
 });
