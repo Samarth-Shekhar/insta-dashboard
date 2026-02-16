@@ -1,135 +1,7 @@
-// --- NUCLEAR COMMENT SCRAPING ---
-async function scrapeVisibleComments(isAuto = false) {
-    let targetHashtag = '';
-    const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
+// Insta-Extractor v9.0 - "Context-Aware" Edition (Fixed)
+// Features: Manual Scrape Hashtag Support, Timestamp Fix, Sidebar Exclusion
 
-    if (isAuto) {
-        log('🤖 AUTO-SCRAPING COMMENTS...', 'success');
-        const hash = window.location.hash;
-        if (hash.includes('&tag=')) {
-            targetHashtag = hash.split('&tag=')[1] || '';
-            log(`🏷️ Hashtag Detected: #${targetHashtag}`);
-        }
-        await sleep(1500);
-    } else {
-        log('💬 Scanning comments...');
-    }
-
-    // SCROLL LOOP
-    for (let i = 0; i < 6; i++) {
-        log(`📜 Deep Scroll ${i + 1}/6...`);
-        let scrolled = false;
-
-        // Find MAIN scroll container
-        const dialog = document.querySelector('div[role="dialog"] div[style*="overflow"]');
-        if (dialog) {
-            dialog.scrollTo(0, dialog.scrollHeight);
-            scrolled = true;
-        }
-
-        // Try generic classes for scrollable areas
-        if (!scrolled) {
-            document.querySelectorAll('div[class*="x1n2onr6"], div[class*="xyamay9"]').forEach(div => {
-                // Ensure it's not the main page scroll if we are in a modal
-                if (div.scrollHeight > div.clientHeight && div.clientHeight > 100) {
-                    div.scrollTop = div.scrollHeight;
-                    scrolled = true;
-                }
-            });
-        }
-
-        // Fallback: only if NO dialog is present
-        if (!scrolled && !document.querySelector('div[role="dialog"]')) window.scrollBy(0, 800);
-
-        // Click "Load more"
-        const loadMoreBtn = document.querySelector('svg[aria-label="Load more comments"]');
-        if (loadMoreBtn) loadMoreBtn.parentElement.click();
-
-        await sleep(1500);
-    }
-
-    const comments = [];
-    const seen = new Set();
-    const UI_BLACKLIST = new Set(['Home', 'Search', 'Explore', 'Reels', 'Messages', 'Notifications', 'Create', 'Profile', 'More', 'Meta', 'About', 'Blog', 'Jobs', 'Help', 'API', 'Privacy', 'Terms', 'Locations', 'Instagram Lite', 'Threads', 'Contact Uploading', 'Meta Verified', 'Follow', 'Followers', 'Following', 'Log in', 'Sign up', 'Report']);
-
-    // NUCLEAR EXTRACTION STRATEGY
-    // 1. Target the Dialog IF it exists, otherwise strict container search
-    let container = document.querySelector('div[role="dialog"]');
-
-    // If no dialog, try to find the comment column specifically
-    if (!container) {
-        // Look for the area with the comment input field
-        const inputArea = document.querySelector('textarea');
-        if (inputArea) {
-            // Traverse up to find the common container for comments
-            let p = inputArea.parentElement;
-            while (p && p.childElementCount < 5) p = p.parentElement; // Heuristic
-            if (p) container = p.parentElement; // Go one higher
-        }
-    }
-
-    // Capture candidates (Text nodes with dir="auto" are best for user content)
-    // If container is null, we DO NOT fall back to body to avoid sidebar scraping
-    const searchContext = container || document.querySelector('main') || null;
-
-    if (!searchContext) {
-        log('⚠️ Could not locate comment section. Aborting to avoid garbage data.', 'error');
-        return;
-    }
-
-    const candidates = searchContext.querySelectorAll('span[dir="auto"], div[dir="auto"], span.x1lliihq');
-
-    if (candidates.length > 0) {
-        log(`🔎 Found ${candidates.length} text blocks. Parsng...`);
-        candidates.forEach(node => {
-            const text = node.innerText.trim();
-            if (text.length < 2) return;
-
-            // Strict UI Filter
-            if (UI_BLACKLIST.has(text)) return;
-            if (text.match(/^(Reply|See translation|View more|Like|Time|hours|days|w|h|m|s|Edited|Pinned)$/i)) return;
-
-            // Heuristic: Is this inside a nav?
-            if (node.closest('nav') || node.closest('header')) return;
-
-            // Username Mapping
-            let username = 'User';
-            let parent = node.parentElement;
-            let foundUser = false;
-
-            // Look for nearby bold text or links
-            while (parent && parent !== searchContext && !foundUser) {
-                const link = parent.querySelector('a, span[style*="font-weight: 600"]');
-                if (link && link.innerText !== text && !UI_BLACKLIST.has(link.innerText)) {
-                    username = link.innerText;
-                    foundUser = true;
-                }
-                parent = parent.parentElement;
-            }
-
-            if (!seen.has(text.substring(0, 20))) {
-                seen.add(text.substring(0, 20));
-                comments.push({
-                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                    username: username.substring(0, 30),
-                    text: text,
-                    mediaId: mediaId,
-                    hashtag: targetHashtag,
-                    timestamp: new Date().toISOString()
-                });
-            }
-        });
-    }
-
-    log(`📦 Found ${comments.length} potential comments.`);
-    if (comments.length > 0) {
-        uploadData(comments, 'UPLOAD_COMMENTS', false);
-        if (isAuto) log('✅ Auto-Action Complete.', 'success');
-    }
-    else {
-        log('⚠️ No unique comments found. Check filters.', 'warn');
-    }
-}
+console.log('🚀 Insta-Extractor v9.0 Fixed Loaded');
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -170,7 +42,7 @@ function injectSimpleUI() {
 
     div.innerHTML = `
         <h3 style="margin:0 0 10px; color:#8e44ad; display:flex; justify-content:space-between; align-items:center;">
-            <span>🤖 Scraper v8.6</span>
+            <span>🤖 Scraper v8.9</span>
             <span style="font-size:12px; color:#999; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">❌</span>
         </h3>
         
@@ -366,16 +238,26 @@ async function scrapeVisibleComments(isAuto = false) {
     let targetHashtag = '';
     const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
+    // PRIORITIZE INPUT FIELD for Hashtag Context (Fixes Manual Scrape Bug)
+    const inputEl = document.getElementById('hashtag-input');
+    if (inputEl && inputEl.value.trim()) {
+        targetHashtag = inputEl.value.trim().replace(/^#/, '');
+    }
+
     if (isAuto) {
         log('🤖 AUTO-SCRAPING COMMENTS...', 'success');
+        // If Auto, URL overrides input if present
         const hash = window.location.hash;
         if (hash.includes('&tag=')) {
             targetHashtag = hash.split('&tag=')[1] || '';
             log(`🏷️ Hashtag Detected: #${targetHashtag}`);
+        } else if (targetHashtag) {
+            log(`🏷️ Hashtag Detected (Input): #${targetHashtag}`);
         }
         await sleep(1500);
     } else {
         log('💬 Scanning comments...');
+        if (targetHashtag) log(`🏷️ Using Hashtag: #${targetHashtag}`);
     }
 
     // SCROLL LOOP
@@ -390,18 +272,19 @@ async function scrapeVisibleComments(isAuto = false) {
             scrolled = true;
         }
 
-        // Try generic classes
+        // Try generic classes for scrollable areas
         if (!scrolled) {
             document.querySelectorAll('div[class*="x1n2onr6"], div[class*="xyamay9"]').forEach(div => {
-                if (div.scrollHeight > div.clientHeight) {
+                // Ensure it's not the main page scroll if we are in a modal
+                if (div.scrollHeight > div.clientHeight && div.clientHeight > 100) {
                     div.scrollTop = div.scrollHeight;
                     scrolled = true;
                 }
             });
         }
 
-        // Fallback
-        if (!scrolled) window.scrollBy(0, 800);
+        // Fallback: only if NO dialog is present
+        if (!scrolled && !document.querySelector('div[role="dialog"]')) window.scrollBy(0, 800);
 
         // Click "Load more"
         const loadMoreBtn = document.querySelector('svg[aria-label="Load more comments"]');
@@ -412,82 +295,91 @@ async function scrapeVisibleComments(isAuto = false) {
 
     const comments = [];
     const seen = new Set();
+    const UI_BLACKLIST_EXTRA = new Set(['Home', 'Search', 'Explore', 'Reels', 'Messages', 'Notifications', 'Create', 'Profile', 'More', 'Meta', 'About', 'Blog', 'Jobs', 'Help', 'API', 'Privacy', 'Terms', 'Locations', 'Instagram Lite', 'Threads', 'Contact Uploading', 'Meta Verified', 'Follow', 'Followers', 'Following', 'Log in', 'Sign up', 'Report', 'Also from Meta']);
 
     // NUCLEAR EXTRACTION STRATEGY
-    // 1. Get ALL text nodes in the dialog
-    const container = document.querySelector('div[role="dialog"]') || document.body;
+    // 1. Target the Dialog IF it exists (Overlay modal)
+    let container = document.querySelector('div[role="dialog"]');
 
-    // 2. Fallback to extracting from SPANs with dir="auto" (Comments usually have this)
-    const candidates = container.querySelectorAll('span[dir="auto"], div[dir="auto"]');
+    // 2. If no dialog, prioritize the <article> tag which usually wraps the post content
+    if (!container) {
+        container = document.querySelector('article');
+    }
+
+    // 3. Fallback to main content area, but try to avoid the sidebar
+    if (!container) {
+        // Look for the area with the comment input field
+        const inputArea = document.querySelector('textarea');
+        if (inputArea) {
+            // Traverse up to find the common container for comments
+            let p = inputArea.parentElement;
+            while (p && p.childElementCount < 5) p = p.parentElement; // Heuristic
+            if (p) container = p.parentElement; // Go one higher
+        }
+    }
+
+    // Capture candidates (Text nodes with dir="auto" are best for user content)
+    // If container is null, we stick to <main> to avoid sidebar scraping
+    const searchContext = container || document.querySelector('main') || null;
+
+    if (!searchContext) {
+        log('⚠️ Could not locate comment section. Aborting to avoid garbage data.', 'error');
+        return;
+    }
+
+    const candidates = searchContext.querySelectorAll('span[dir="auto"], div[dir="auto"], span.x1lliihq');
 
     if (candidates.length > 0) {
         log(`🔎 Found ${candidates.length} text blocks. Parsng...`);
         candidates.forEach(node => {
             const text = node.innerText.trim();
             if (text.length < 2) return;
-            if (text.match(/^(Reply|See translation|View more|Like|Time|hours|days|w|h|m|s)$/i)) return; // Filters
 
-            // Try to find a sibling or parent that looks like a username
-            // Usually username is a Link or an h2/h3 nearby
+            // Strict UI Filter
+            if (UI_BLACKLIST_EXTRA.has(text)) return;
+            if (text.match(/^(Reply|See translation|View more|Like|Time|hours|days|w|h|m|s|Edited|Pinned)$/i)) return;
+            // Additional check for "Also from Meta" or similar phrases
+            if (text.includes('Also from Meta')) return;
+
+            // Heuristic: Is this inside a nav?
+            if (node.closest('nav') || node.closest('header')) return;
+
+            // Username Mapping
             let username = 'User';
-
-            // HEURISTIC: Username is often the previous sibling's text or in a container above
-            // This is hard. But let's try a simpler approach.
-            // Just capturing the text is better than nothing.
-
-            // If the text is long, it's likely a comment.
-            // If we can't find a username, we'll label it "Scraped User".
-            // Or look for an <a> tag in the parent tree
             let parent = node.parentElement;
             let foundUser = false;
-            while (parent && parent !== container && !foundUser) {
-                const link = parent.querySelector('a, h3');
-                if (link && link.innerText !== text) {
+
+            // Look for nearby bold text or links
+            while (parent && parent !== searchContext && !foundUser) {
+                const link = parent.querySelector('a, span[style*="font-weight: 600"]');
+                if (link && link.innerText !== text && !UI_BLACKLIST_EXTRA.has(link.innerText)) {
                     username = link.innerText;
                     foundUser = true;
                 }
                 parent = parent.parentElement;
-                if (!foundUser && parent && parent.innerText && parent.innerText.split('\n')[0] !== text) {
-                    // Maybe parent text starts with username?
-                    const lines = parent.innerText.split('\n');
-                    if (lines.length > 1 && lines[1] === text) {
-                        username = lines[0];
-                        foundUser = true;
-                    }
-                }
             }
 
             if (!seen.has(text.substring(0, 20))) {
                 seen.add(text.substring(0, 20));
                 comments.push({
-                    id: Math.random(),
-                    username: username.substring(0, 30), // truncated
+                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    username: username.substring(0, 30),
                     text: text,
                     mediaId: mediaId,
-                    hashtag: targetHashtag
+                    hashtag: targetHashtag,
+                    timestamp: new Date().toISOString()
                 });
             }
         });
     }
 
-    // BACKUP STRATEGY: UL LI
-    if (comments.length === 0) {
-        log('⚠️ Generic parser failed. Trying Lists...');
-        document.querySelectorAll('ul li').forEach(li => {
-            const t = li.innerText;
-            if (t.length > 5 && !seen.has(t.substring(0, 10))) {
-                comments.push({ id: Math.random(), username: 'ListUser', text: t, mediaId, hashtag: targetHashtag });
-            }
-        });
-    }
-
-    log(`📦 Found ${comments.length} comments.`);
+    log(`📦 Found ${comments.length} potential comments.`);
     if (comments.length > 0) {
         uploadData(comments, 'UPLOAD_COMMENTS', false);
         if (isAuto) log('✅ Auto-Action Complete.', 'success');
     }
     else {
-        log('⚠️ No comments found. Try manually opening comments first.', 'warn');
+        log('⚠️ No unique comments found. Check filters.', 'warn');
     }
 }
 

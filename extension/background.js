@@ -1,45 +1,44 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    const ENDPOINTS = [
+        'http://localhost:5001/api',
+        'https://insta-backend-azure.vercel.app/api'
+    ];
+
+    async function sendToBackend(path, body) {
+        for (const base of ENDPOINTS) {
+            try {
+                console.log(`[Background] Trying upload to: ${base}${path}`);
+                const res = await fetch(`${base}${path}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log(`[Background] Success with ${base}`);
+                    return data;
+                }
+            } catch (e) {
+                console.warn(`[Background] Failed to reach ${base}:`, e);
+            }
+        }
+        throw new Error('All backend endpoints failed');
+    }
+
     if (request.action === 'UPLOAD_HASHTAGS') {
         console.log('[Background] Received upload request');
         console.log('[Background] Number of posts:', request.data?.length);
-        console.log('[Background] Sample post:', request.data?.[0]);
 
+        sendToBackend('/hashtags/import', { posts: request.data })
+            .then(data => sendResponse({ success: true, count: data.count }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
 
-        // Fetch from Background Script (Bypasses Page CSP)
-        fetch('https://insta-backend-azure.vercel.app/api/hashtags/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ posts: request.data })
-        })
-            .then(async res => {
-                console.log('[Background] Response status:', res.status);
-                if (!res.ok) {
-                    const errorText = await res.text();
-                    console.error('[Background] Error response:', errorText);
-                    throw new Error(errorText);
-                }
-                return res.json();
-            })
-            .then(data => {
-                console.log('[Background] Upload Success:', data);
-                sendResponse({ success: true, count: data.count });
-            })
-            .catch(err => {
-                console.error('[Background] Upload Error:', err);
-                sendResponse({ success: false, error: err.message });
-            });
-
-        return true; // Keep channel open for async response
+        return true;
     }
 
     if (request.action === 'UPLOAD_COMMENTS') {
         console.log('[Background] Uploading comments:', request.data?.length);
-        fetch('https://insta-backend-azure.vercel.app/api/comments/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ comments: request.data })
-        })
-            .then(res => res.json())
+        sendToBackend('/comments/import', { comments: request.data })
             .then(data => sendResponse(data))
             .catch(err => sendResponse({ error: err.message }));
         return true;
