@@ -1,47 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Comment = require('../models/Comment');
-const { fetchCommentsViaPuppeteer } = require('../utils/puppeteer');
-const { Parser } = require('json2csv');
-
-// POST /api/comments/fetch
-router.post('/fetch', async (req, res) => {
-    const { url } = req.body;
-    const accessToken = process.env.META_ACCESS_TOKEN;
-    const businessAccountId = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID;
-
-    if (!url) {
-        return res.status(400).json({ error: 'URL is required' });
-    }
-
-    try {
-        // 1. Fetch Comments using Puppeteer (No API Key needed)
-        // This works for Personal accounts as long as the post is Public.
-        const result = await fetchCommentsViaPuppeteer(url);
-        const { mediaId, comments } = result;
-
-        // 2. Store in MongoDB
-        if (comments.length > 0) {
-            const operations = comments.map(comment => ({
-                updateOne: {
-                    filter: { id: comment.id },
-                    update: { ...comment },
-                    upsert: true
-                }
-            }));
-            await Comment.bulkWrite(operations);
-        }
-
-        res.json({
-            success: true,
-            count: comments.length,
-            mediaId
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
-    }
-});
+// Puppeteer fetch route removed for Vercel compatibility
+// Use the Chrome Extension for scraping.
 
 const authenticateToken = require('../middleware/authMiddleware');
 const jwt = require('jsonwebtoken');
