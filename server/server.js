@@ -8,13 +8,30 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware - MUST be before routes to parse JSON body
-// Middleware (CORS)
+// Enable CORS for all routes
 app.use(cors({
-    origin: ['https://insta-client-seven.vercel.app', 'http://localhost:5173', 'http://localhost:5001'],
+    origin: function (origin, callback) {
+        const allowedOrigins = [
+            'https://insta-client-seven.vercel.app',
+            'http://localhost:5173',
+            'http://localhost:5001'
+        ];
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    credentials: true,
+    optionsSuccessStatus: 200
 }));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json());
 
