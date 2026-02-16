@@ -1,7 +1,7 @@
-// Insta-Extractor v9.0 - "Context-Aware" Edition (Fixed)
-// Features: Manual Scrape Hashtag Support, Timestamp Fix, Sidebar Exclusion
+// Insta-Extractor v9.1 - "Robust Tagging"
+// Features: Manual Scrape Hashtag Support, Timestamp Fix, Sidebar Exclusion, Better Tag Parsing
 
-console.log('🚀 Insta-Extractor v9.0 Fixed Loaded');
+console.log('🚀 Insta-Extractor v9.1 Loaded');
 
 // --- UTILS ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -238,7 +238,7 @@ async function scrapeVisibleComments(isAuto = false) {
     let targetHashtag = '';
     const mediaId = window.location.href.match(/\/p\/([^/?]+)/)?.[1] || 'unknown';
 
-    // PRIORITIZE INPUT FIELD for Hashtag Context (Fixes Manual Scrape Bug)
+    // PRIORITIZE INPUT FIELD for Hashtag Context
     const inputEl = document.getElementById('hashtag-input');
     if (inputEl && inputEl.value.trim()) {
         targetHashtag = inputEl.value.trim().replace(/^#/, '');
@@ -246,14 +246,30 @@ async function scrapeVisibleComments(isAuto = false) {
 
     if (isAuto) {
         log('🤖 AUTO-SCRAPING COMMENTS...', 'success');
-        // If Auto, URL overrides input if present
-        const hash = window.location.hash;
-        if (hash.includes('&tag=')) {
-            targetHashtag = hash.split('&tag=')[1] || '';
-            log(`🏷️ Hashtag Detected: #${targetHashtag}`);
-        } else if (targetHashtag) {
-            log(`🏷️ Hashtag Detected (Input): #${targetHashtag}`);
+
+        // Robust Hash Parsing
+        try {
+            // Remove the leading '#' from location.hash
+            const hashString = window.location.hash.substring(1);
+            // Handle the specific format used: scrape_comments&tag=xyz
+            const params = new URLSearchParams(hashString);
+
+            const tagFromUrl = params.get('tag');
+            if (tagFromUrl) {
+                targetHashtag = decodeURIComponent(tagFromUrl);
+                log(`🏷️ Hashtag Detected (URL): #${targetHashtag}`);
+            } else {
+                // Fallback for simple string splitting if URLSearchParams fails
+                const parts = hashString.split('&tag=');
+                if (parts.length > 1) {
+                    targetHashtag = decodeURIComponent(parts[1]);
+                    log(`🏷️ Hashtag Detected (Fallback): #${targetHashtag}`);
+                }
+            }
+        } catch (e) {
+            log('⚠️ Error parsing URL hash for tag: ' + e.message, 'warn');
         }
+
         await sleep(1500);
     } else {
         log('💬 Scanning comments...');
